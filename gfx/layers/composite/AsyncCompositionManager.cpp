@@ -251,26 +251,6 @@ SetShadowTransform(Layer* aLayer, LayerToParentLayerMatrix4x4 aTransform)
   aTransform.PostScale(1.0f / aLayer->GetPostXScale(),
                        1.0f / aLayer->GetPostYScale(),
                        1);
-
-  // TIGER_FLIP: Log when APZ sets a shadow transform with negative Y-scale
-  {
-    gfx::Matrix4x4 m = aTransform.ToUnknownMatrix();
-    if (m._22 < 0.0f) {
-      static int shadowNegCount = 0;
-      shadowNegCount++;
-      if (shadowNegCount <= 50 || (shadowNegCount % 200) == 0) {
-        ContainerLayer* c = aLayer->AsContainerLayer();
-        fprintf(stderr, "TIGER_FLIP_SHADOW: NEG shadow _22=%.4f _11=%.4f "
-                "layer='%s' preYScale=%.3f postYScale=%.3f "
-                "isContainer=%d count=%d\n",
-                m._22, m._11, aLayer->Name(),
-                c ? c->GetPreYScale() : 1.0f,
-                aLayer->GetPostYScale(),
-                (c != nullptr), shadowNegCount);
-      }
-    }
-  }
-
   aLayer->AsLayerComposite()->SetShadowBaseTransform(aTransform.ToUnknownMatrix());
 }
 
@@ -1049,24 +1029,6 @@ AsyncCompositionManager::ApplyAsyncContentTransformToTree(Layer *aLayer,
           // GetTransform()) in case the OMTA code in SampleAnimations already set a
           // shadow transform; in that case we want to apply ours on top of that one
           // rather than clobber it.
-
-          // TIGER_FLIP: Log the components going into shadow transform
-          {
-            auto localT = layer->GetLocalTransformTyped().ToUnknownMatrix();
-            auto asyncT = AdjustForClip(combinedAsyncTransform, layer).ToUnknownMatrix();
-            auto combined = localT * asyncT;
-            if (combined._22 < 0.0f || localT._22 < 0.0f || asyncT._22 < 0.0f) {
-              static int apzNegCount = 0;
-              apzNegCount++;
-              if (apzNegCount <= 50 || (apzNegCount % 200) == 0) {
-                fprintf(stderr, "TIGER_FLIP_APZ: layer='%s' local._22=%.4f "
-                        "async._22=%.4f combined._22=%.4f count=%d\n",
-                        layer->Name(), localT._22, asyncT._22,
-                        combined._22, apzNegCount);
-              }
-            }
-          }
-
           SetShadowTransform(layer,
               layer->GetLocalTransformTyped()
             * AdjustForClip(combinedAsyncTransform, layer));

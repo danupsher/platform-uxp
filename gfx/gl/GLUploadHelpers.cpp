@@ -640,14 +640,6 @@ CanUploadNonPowerOfTwo(GLContext* gl)
     if (!gl->IsGLES()) {
         bool hasNPOTExt = gl->IsExtensionSupported(GLContext::ARB_texture_non_power_of_two) ||
                           gl->IsExtensionSupported(GLContext::OES_texture_npot);
-        static bool logged = false;
-        if (!logged) {
-            logged = true;
-            fprintf(stderr, "TIGER_NPOT: CanUploadNonPowerOfTwo: ext_arb=%d, ext_oes=%d\n",
-                    (int)gl->IsExtensionSupported(GLContext::ARB_texture_non_power_of_two),
-                    (int)gl->IsExtensionSupported(GLContext::OES_texture_npot));
-            fflush(stderr);
-        }
         if (!hasNPOTExt)
             return false;
     }

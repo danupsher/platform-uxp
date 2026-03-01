@@ -1565,14 +1565,9 @@ CompositorBridgeParent::InitializeLayerManager(const nsTArray<LayersBackend>& aB
 RefPtr<Compositor>
 CompositorBridgeParent::NewCompositor(const nsTArray<LayersBackend>& aBackendHints)
 {
-  fprintf(stderr, "TIGER_COMP: NewCompositor called with %d backend hints\n", (int)aBackendHints.Length());
-  fflush(stderr);
   for (size_t i = 0; i < aBackendHints.Length(); ++i) {
-    fprintf(stderr, "TIGER_COMP: trying backend hint[%d]=%d (2=opengl,1=basic)\n", (int)i, (int)aBackendHints[i]);
-    fflush(stderr);
     RefPtr<Compositor> compositor;
     if (aBackendHints[i] == LayersBackend::LAYERS_OPENGL) {
-      fprintf(stderr, "TIGER_COMP: creating CompositorOGL\n");
       compositor = new CompositorOGL(this,
                                      mWidget,
                                      mEGLSurfaceSize.width,
@@ -1597,13 +1592,10 @@ CompositorBridgeParent::NewCompositor(const nsTArray<LayersBackend>& aBackendHin
       if (failureReason.IsEmpty()){
         failureReason = "SUCCESS";
       }
-      fprintf(stderr, "TIGER_COMP: backend %d initialized OK: %s\n", (int)aBackendHints[i], failureReason.get());
-      fflush(stderr);
+
       compositor->SetCompositorID(mCompositorID);
       return compositor;
     }
-    fprintf(stderr, "TIGER_COMP: backend %d FAILED: %s\n", (int)aBackendHints[i], failureReason.get());
-    fflush(stderr);
 
     // report any failure reasons here
     if (aBackendHints[i] == LayersBackend::LAYERS_OPENGL){
@@ -1628,9 +1620,6 @@ CompositorBridgeParent::AllocPLayerTransactionParent(const nsTArray<LayersBacken
                                                bool *aSuccess)
 {
   MOZ_ASSERT(aId == 0);
-
-  fprintf(stderr, "TIGER_COMP: AllocPLayerTransactionParent called with %d hints\n", (int)aBackendHints.Length());
-  fflush(stderr);
 
   InitializeLayerManager(aBackendHints);
 

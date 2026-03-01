@@ -323,6 +323,10 @@ GLContextProviderCGL::CreateForWindow(nsIWidget* aWidget, bool aForceAccelerated
         return nullptr;
     }
 
+    // make the context transparent
+    long opaque = 0;
+    [context setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
+
     SurfaceCaps caps = SurfaceCaps::ForRGBA();
     ContextProfile profile = ContextProfile::OpenGLCompatibility;
     RefPtr<GLContextCGL> glContext = new GLContextCGL(CreateContextFlags::NONE, caps,
