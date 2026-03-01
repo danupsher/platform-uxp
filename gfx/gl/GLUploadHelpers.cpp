@@ -383,6 +383,50 @@ TexImage2DHelper(GLContext* gl,
     } else {
         // desktop GL (non-ES) path
 
+        // TIGER FIX: On desktop GL without ARB_texture_non_power_of_two (e.g. GL 1.5),
+        // NPOT textures with GL_TEXTURE_2D generate GL_INVALID_VALUE.
+        // Pad to POT sizes, same as the GLES path does.
+        if (!CanUploadNonPowerOfTwo(gl)
+            && (!IsPowerOfTwo((uint32_t)width)
+            || !IsPowerOfTwo((uint32_t)height))) {
+
+            GLsizei paddedWidth = RoundUpPow2((uint32_t)width);
+            GLsizei paddedHeight = RoundUpPow2((uint32_t)height);
+
+            MOZ_ASSERT(width <= 16384);
+            MOZ_ASSERT(height <= 16384);
+            MOZ_ASSERT(pixelsize < 8);
+
+            const auto size =
+                CheckedInt<size_t>(paddedWidth) * paddedHeight * pixelsize;
+            if (!size.isValid()) {
+              MOZ_ASSERT_UNREACHABLE("Unacceptable size calculated!");
+              return;
+            }
+
+            GLvoid* paddedPixels = new unsigned char[size.value()];
+            CopyAndPadTextureData(pixels, paddedPixels, width, height,
+                                  paddedWidth, paddedHeight, stride, pixelsize);
+
+            gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT,
+                             std::min(GetAddressAlignment((ptrdiff_t)paddedPixels),
+                                      GetAddressAlignment((ptrdiff_t)paddedWidth * pixelsize)));
+            gl->fPixelStorei(LOCAL_GL_UNPACK_ROW_LENGTH, 0);
+            gl->fTexImage2D(target,
+                            border,
+                            internalformat,
+                            paddedWidth,
+                            paddedHeight,
+                            border,
+                            format,
+                            type,
+                            paddedPixels);
+            gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT, 4);
+
+            delete[] static_cast<unsigned char*>(paddedPixels);
+            return;
+        }
+
         gl->fPixelStorei(LOCAL_GL_UNPACK_ALIGNMENT,
                          std::min(GetAddressAlignment((ptrdiff_t)pixels),
                                   GetAddressAlignment((ptrdiff_t)stride)));
@@ -584,8 +628,31 @@ CanUploadNonPowerOfTwo(GLContext* gl)
         return true;
 
     // Some GPUs driver crash when uploading non power of two 565 textures.
-    return gl->Renderer() != GLRenderer::Adreno200 &&
-           gl->Renderer() != GLRenderer::Adreno205;
+    if (gl->Renderer() == GLRenderer::Adreno200 ||
+        gl->Renderer() == GLRenderer::Adreno205)
+        return false;
+
+    // TIGER FIX: Desktop GL without NPOT support rejects NPOT dimensions
+    // with GL_INVALID_VALUE on glTexImage2D(GL_TEXTURE_2D, ...).
+    // CGL sets mVersion to 210 regardless of actual hardware capability
+    // (bug 999445 workaround), so Version() can't be trusted. Check the
+    // extension string directly — GL 2.0+ compat profiles still list it.
+    if (!gl->IsGLES()) {
+        bool hasNPOTExt = gl->IsExtensionSupported(GLContext::ARB_texture_non_power_of_two) ||
+                          gl->IsExtensionSupported(GLContext::OES_texture_npot);
+        static bool logged = false;
+        if (!logged) {
+            logged = true;
+            fprintf(stderr, "TIGER_NPOT: CanUploadNonPowerOfTwo: ext_arb=%d, ext_oes=%d\n",
+                    (int)gl->IsExtensionSupported(GLContext::ARB_texture_non_power_of_two),
+                    (int)gl->IsExtensionSupported(GLContext::OES_texture_npot));
+            fflush(stderr);
+        }
+        if (!hasNPOTExt)
+            return false;
+    }
+
+    return true;
 }
 
 } // namespace gl

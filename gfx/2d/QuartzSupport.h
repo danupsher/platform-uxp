@@ -6,6 +6,9 @@
 #ifndef nsCoreAnimationSupport_h__
 #define nsCoreAnimationSupport_h__
 #ifdef XP_MACOSX
+#include <AvailabilityMacros.h>
+// CoreAnimation/IOSurface require Mac OS X 10.6+
+#if defined(MAC_OS_X_VERSION_10_6) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6
 
 #import <OpenGL/OpenGL.h>
 #import <OpenGL/gl.h>
@@ -92,6 +95,7 @@ private:
   double                    mContentsScaleFactor;
 };
 
+#endif // MAC_OS_X_VERSION_10_6
 #endif // XP_MACOSX
 #endif // nsCoreAnimationSupport_h__
 

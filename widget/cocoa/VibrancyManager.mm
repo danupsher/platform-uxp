@@ -5,7 +5,24 @@
 
 #include "VibrancyManager.h"
 #include "nsChildView.h"
+#include <AvailabilityMacros.h>
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
 #import <objc/message.h>
+#else
+#import <objc/objc-runtime.h>
+/* ObjC 2.0 runtime stubs for Tiger.  These never execute — vibrancy is
+   disabled on 32-bit PPC (see ComputeSystemSupportsVibrancy). */
+static inline Class objc_allocateClassPair(Class superclass, const char *name,
+                                           size_t extraBytes) {
+    (void)superclass; (void)name; (void)extraBytes;
+    return Nil;
+}
+static inline BOOL class_addMethod(Class cls, SEL name, IMP imp,
+                                   const char *types) {
+    (void)cls; (void)name; (void)imp; (void)types;
+    return NO;
+}
+#endif
 
 using namespace mozilla;
 

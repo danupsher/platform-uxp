@@ -6,6 +6,12 @@
 #ifndef nsCocoaDebugUtils_h_
 #define nsCocoaDebugUtils_h_
 
+#include <AvailabilityMacros.h>
+
+/* CoreSymbolication is a private 10.6+ framework; libproc.h is 10.5+.
+   On Tiger, provide a stub class with no-op methods. */
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
+
 #include <CoreServices/CoreServices.h>
 
 // Definitions and declarations of stuff used by us from the CoreSymbolication
@@ -96,21 +102,9 @@ CSArchitectureGetFamilyName(CSArchitecture);
 class nsCocoaDebugUtils
 {
 public:
-  // Like NSLog() but records more information (for example the full path to
-  // the executable and the "thread name").  Like NSLog(), writes to both
-  // stdout and the system log.
   static void DebugLog(const char* aFormat, ...);
-
-  // Logs a stack trace of the current point of execution, to both stdout and
-  // the system log.
   static void PrintStackTrace();
-
-  // Returns the name of the module that "owns" aAddress.  This must be
-  // free()ed by the caller.
   static char* GetOwnerName(void* aAddress);
-
-  // Returns a symbolicated representation of aAddress.  This must be
-  // free()ed by the caller.
   static char* GetAddressString(void* aAddress);
 
 private:
@@ -119,8 +113,6 @@ private:
 
   static void PrintAddress(void* aAddress);
 
-  // The values returned by GetOwnerNameInt() and GetAddressStringInt() must
-  // be free()ed by the caller.
   static char* GetOwnerNameInt(void* aAddress,
                                CSTypeRef aOwner = sInitializer);
   static char* GetAddressStringInt(void* aAddress,
@@ -132,5 +124,20 @@ private:
   static CSTypeRef sInitializer;
   static CSSymbolicatorRef sSymbolicator;
 };
+
+#else /* Tiger — stub class */
+
+#include <cstdlib>
+
+class nsCocoaDebugUtils
+{
+public:
+  static void DebugLog(const char*, ...) {}
+  static void PrintStackTrace() {}
+  static char* GetOwnerName(void*) { return NULL; }
+  static char* GetAddressString(void*) { return NULL; }
+};
+
+#endif /* MAC_OS_X_VERSION check */
 
 #endif // nsCocoaDebugUtils_h_

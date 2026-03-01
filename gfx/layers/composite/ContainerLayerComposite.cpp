@@ -321,6 +321,29 @@ RenderLayers(ContainerT* aContainer,
 {
   Compositor* compositor = aManager->GetCompositor();
 
+  // TIGER_FLIP: Log container transform and children with negative Y-scale
+  {
+    static int rlFrameCount = 0;
+    rlFrameCount++;
+    gfx::Matrix4x4 ct = aContainer->GetEffectiveTransform();
+    bool containerNeg = (ct._22 < 0.0f);
+
+    // Always log negative scaling; periodic summary every 300 frames
+    if (containerNeg) {
+      fprintf(stderr, "TIGER_FLIP_LAYER: container '%s' has NEGATIVE _22=%.3f "
+              "_11=%.3f _42=%.1f useIntermediate=%d children=%zu frame=%d\n",
+              aContainer->Name(), ct._22, ct._11, ct._42,
+              (int)aContainer->UseIntermediateSurface(),
+              (size_t)aContainer->mPrepared->mLayers.Length(), rlFrameCount);
+    } else if ((rlFrameCount % 600) == 1) {
+      fprintf(stderr, "TIGER_FLIP_LAYER: container '%s' _22=%.3f _11=%.3f "
+              "useIntermediate=%d children=%zu frame=%d\n",
+              aContainer->Name(), ct._22, ct._11,
+              (int)aContainer->UseIntermediateSurface(),
+              (size_t)aContainer->mPrepared->mLayers.Length(), rlFrameCount);
+    }
+  }
+
   for (size_t i = 0u; i < aContainer->mPrepared->mLayers.Length(); i++) {
     PreparedLayer& preparedData = aContainer->mPrepared->mLayers[i];
     LayerComposite* layerToRender = static_cast<LayerComposite*>(preparedData.mLayer->ImplData());
@@ -329,6 +352,21 @@ RenderLayers(ContainerT* aContainer,
 
     if (layerToRender->HasStaleCompositor()) {
       continue;
+    }
+
+    // TIGER_FLIP: Log any child layer with negative Y-scale
+    {
+      gfx::Matrix4x4 lt = layer->GetEffectiveTransform();
+      if (lt._22 < 0.0f) {
+        static int negLog = 0;
+        if (negLog < 200) {
+          negLog++;
+          fprintf(stderr, "TIGER_FLIP_LAYER: child[%zu] '%s' has NEGATIVE "
+                  "_22=%.3f _11=%.3f _41=%.1f _42=%.1f parent='%s'\n",
+                  i, layer->Name(), lt._22, lt._11, lt._41, lt._42,
+                  aContainer->Name());
+        }
+      }
     }
 
     if (gfxPrefs::LayersDrawFPS()) {

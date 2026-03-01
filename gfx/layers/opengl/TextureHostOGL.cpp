@@ -20,7 +20,7 @@
 #include "GLBlitTextureImageHelper.h"
 #include "GeckoProfiler.h"
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 #include "mozilla/layers/MacIOSurfaceTextureHostOGL.h"
 #endif
 
@@ -49,7 +49,7 @@ CreateTextureHostOGL(const SurfaceDescriptor& aDesc,
       break;
     }
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     case SurfaceDescriptor::TSurfaceDescriptorMacIOSurface: {
       const SurfaceDescriptorMacIOSurface& desc =
         aDesc.get_SurfaceDescriptorMacIOSurface();
@@ -108,6 +108,17 @@ TextureImageTextureSourceOGL::Update(gfx::DataSourceSurface* aSurface,
   MOZ_ASSERT(aSurface);
 
   IntSize size = aSurface->GetSize();
+  // TIGER_DIAG: log texture uploads
+  {
+    static int logCount = 0;
+    if (logCount < 20) {
+      logCount++;
+      GLenum err = gl->fGetError(); // clear pending errors
+      fprintf(stderr, "TIGER_TEX: Update called, size=%dx%d, format=%d, pendingGLerr=%d\n",
+              size.width, size.height, (int)aSurface->GetFormat(), (int)err);
+      fflush(stderr);
+    }
+  }
   if (!mTexImage ||
       (mTexImage->GetSize() != size && !aSrcOffset) ||
       mTexImage->GetContentType() != gfx::ContentForFormat(aSurface->GetFormat())) {
@@ -151,6 +162,18 @@ TextureImageTextureSourceOGL::Update(gfx::DataSourceSurface* aSurface,
   }
 
   mTexImage->UpdateFromDataSource(aSurface, aDestRegion, aSrcOffset);
+
+  // TIGER_DIAG: check GL errors after upload
+  {
+    static int logCount2 = 0;
+    if (logCount2 < 20) {
+      logCount2++;
+      GLenum err = gl->fGetError();
+      fprintf(stderr, "TIGER_TEX: after upload, size=%dx%d, GLerr=%d (0=ok, 1281=INVALID_VALUE, 1282=INVALID_OP)\n",
+              size.width, size.height, (int)err);
+      fflush(stderr);
+    }
+  }
 
   return true;
 }

@@ -2,6 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include <AvailabilityMacros.h>
+#if defined(MAC_OS_X_VERSION_10_6) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6
+
 #import <Cocoa/Cocoa.h>
 #import <CoreWLAN/CoreWLAN.h>
 
@@ -106,3 +109,17 @@ GetAccessPointsFromWLAN(nsCOMArray<nsWifiAccessPoint> &accessPoints)
 
   NS_OBJC_END_TRY_ABORT_BLOCK_RETURN(NS_ERROR_NOT_AVAILABLE);
 }
+
+#else /* pre-10.6: no CoreWLAN */
+
+#include "nsCOMArray.h"
+#include "nsWifiAccessPoint.h"
+#include "nsError.h"
+nsresult
+GetAccessPointsFromWLAN(nsCOMArray<nsWifiAccessPoint> &accessPoints)
+{
+  accessPoints.Clear();
+  return NS_ERROR_NOT_AVAILABLE;
+}
+
+#endif /* MAC_OS_X_VERSION >= 10.6 */

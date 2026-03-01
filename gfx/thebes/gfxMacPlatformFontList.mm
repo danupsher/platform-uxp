@@ -1271,6 +1271,7 @@ static NSString* GetRealFamilyName(NSFont* aFont)
         // Eventually we should move to using CTFontUIFontType constants to identify
         // system fonts, and eliminate the need to instantiate them (indirectly) from
         // their postscript names.
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
         CGFontRef cgFont = CGFontCreateWithFontName(CFStringRef(psName));
         if (!cgFont) {
              return [aFont familyName];
@@ -1286,6 +1287,9 @@ static NSString* GetRealFamilyName(NSFont* aFont)
         CFRelease(cgFont);
         CFRelease(ctFont);
         return [familyName autorelease];
+#else
+        return [aFont familyName];
+#endif
     }
     NSFont* f = [NSFont fontWithName: [[aFont fontDescriptor] postscriptName]
                         size: 0.0];

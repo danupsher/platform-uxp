@@ -5,6 +5,9 @@
 
 #include "nsCocoaDebugUtils.h"
 
+#include <AvailabilityMacros.h>
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
+
 #include <pthread.h>
 #include <libproc.h>
 #include <stdarg.h>
@@ -289,3 +292,5 @@ nsCocoaDebugUtils::ReleaseSymbolicator()
     CSRelease(sSymbolicator);
   }
 }
+
+#endif /* MAC_OS_X_VERSION >= 10.5 */

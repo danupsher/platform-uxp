@@ -57,6 +57,11 @@ using namespace mozilla::gl;
 static const GLuint kCoordinateAttributeIndex = 0;
 static const GLuint kTexCoordinateAttributeIndex = 1;
 
+// Tiger flip diagnostics: per-frame FBO tracking
+static int gTigerFrameFBOSwitches = 0;
+static int gTigerFrameMaxFBODepth = 0;
+static int gTigerFrameCurFBODepth = 0;
+
 static void
 BindMaskForProgram(ShaderProgramOGL* aProgram, TextureSourceOGL* aSourceMask,
                    GLenum aTexUnit, const gfx::Matrix4x4& aTransform)
@@ -227,8 +232,10 @@ CompositorOGL::Initialize(nsCString* const out_failureReason)
 
   if (!mGLContext){
     *out_failureReason = "FEATURE_FAILURE_OPENGL_CREATE_CONTEXT";
+    fprintf(stderr, "TIGER_GL: CompositorOGL::Initialize FAILED — no GL context\n");
     return false;
   }
+  fprintf(stderr, "TIGER_GL: CompositorOGL::Initialize — GL context created OK\n");
 
   MakeCurrent();
 
@@ -245,8 +252,10 @@ CompositorOGL::Initialize(nsCString* const out_failureReason)
   ShaderConfigOGL config = GetShaderConfigFor(effect);
   if (!GetShaderProgramFor(config)) {
     *out_failureReason = "FEATURE_FAILURE_OPENGL_COMPILE_SHADER";
+    fprintf(stderr, "TIGER_GL: CompositorOGL::Initialize FAILED — shader compile\n");
     return false;
   }
+  fprintf(stderr, "TIGER_GL: CompositorOGL::Initialize — shader compiled OK\n");
 
   if (mGLContext->WorkAroundDriverBugs()) {
     /**
@@ -410,6 +419,10 @@ CompositorOGL::Initialize(nsCString* const out_failureReason)
     console->LogStringMessage(msg.get());
   }
 
+  fprintf(stderr, "TIGER_GL: CompositorOGL::Initialize SUCCESS — GL %s, %s, FBO target=%s\n",
+          (const char*)mGLContext->fGetString(LOCAL_GL_VERSION),
+          (const char*)mGLContext->fGetString(LOCAL_GL_RENDERER),
+          mFBOTextureTarget == LOCAL_GL_TEXTURE_2D ? "TEXTURE_2D" : "TEXTURE_RECTANGLE");
   return true;
 }
 
@@ -472,7 +485,9 @@ CompositorOGL::PrepareViewport(CompositingRenderTargetOGL* aRenderTarget)
     // Matrix to transform (0, 0, aWidth, aHeight) to viewport space (-1.0, 1.0,
     // 2, 2) and flip the contents.
     Matrix viewMatrix;
-    if (mGLContext->IsOffscreen() && !gIsGtest) {
+    bool isOffscreen = mGLContext->IsOffscreen();
+    bool isWindow = aRenderTarget->GetFBO() == 0;
+    if (isOffscreen && !gIsGtest) {
       // In case of rendering via GL Offscreen context, disable Y-Flipping
       viewMatrix.PreTranslate(-1.0, -1.0);
       viewMatrix.PreScale(2.0f / float(size.width), 2.0f / float(size.height));
@@ -480,6 +495,32 @@ CompositorOGL::PrepareViewport(CompositingRenderTargetOGL* aRenderTarget)
       viewMatrix.PreTranslate(-1.0, 1.0);
       viewMatrix.PreScale(2.0f / float(size.width), 2.0f / float(size.height));
       viewMatrix.PreScale(1.0f, -1.0f);
+    }
+
+    // Tiger diagnostic: log FBO target switches.  Window (FBO=0) limited;
+    // non-window FBOs logged more generously to catch intermediate-surface usage.
+    {
+      static int vpWinLog = 0;
+      static int vpFboLog = 0;
+      if (isWindow && vpWinLog < 5) {
+        vpWinLog++;
+        fprintf(stderr, "TIGER_FLIP: PrepareViewport WINDOW FBO=0 size=%dx%d "
+                "proj=[%.3f %.3f; %.3f %.3f; %.3f %.3f]\n",
+                size.width, size.height,
+                viewMatrix._11, viewMatrix._12,
+                viewMatrix._21, viewMatrix._22,
+                viewMatrix._31, viewMatrix._32);
+        fflush(stderr);
+      } else if (!isWindow && vpFboLog < 100) {
+        vpFboLog++;
+        fprintf(stderr, "TIGER_FLIP: PrepareViewport FBO=%d size=%dx%d "
+                "proj=[%.3f %.3f; %.3f %.3f; %.3f %.3f]\n",
+                (int)aRenderTarget->GetFBO(), size.width, size.height,
+                viewMatrix._11, viewMatrix._12,
+                viewMatrix._21, viewMatrix._22,
+                viewMatrix._31, viewMatrix._32);
+        fflush(stderr);
+      }
     }
 
     MOZ_ASSERT(mCurrentRenderTarget, "No destination");
@@ -572,6 +613,15 @@ CompositorOGL::SetRenderTarget(CompositingRenderTarget *aSurface)
     = static_cast<CompositingRenderTargetOGL*>(aSurface);
   if (mCurrentRenderTarget != surface) {
     mCurrentRenderTarget = surface;
+    // Tiger diagnostic: track FBO switches per frame
+    gTigerFrameFBOSwitches++;
+    if (surface->GetFBO() != 0) {
+      gTigerFrameCurFBODepth++;
+      if (gTigerFrameCurFBODepth > gTigerFrameMaxFBODepth)
+        gTigerFrameMaxFBODepth = gTigerFrameCurFBODepth;
+    } else {
+      gTigerFrameCurFBODepth = 0;
+    }
     if (mCurrentRenderTarget) {
       mContextStateTracker.PopOGLSection(gl(), "Frame");
     }
@@ -645,6 +695,11 @@ CompositorOGL::BeginFrame(const nsIntRegion& aInvalidRegion,
 
   // We're about to actually draw a frame.
   mFrameInProgress = true;
+
+  // Tiger diagnostic: reset per-frame FBO counters
+  gTigerFrameFBOSwitches = 0;
+  gTigerFrameMaxFBODepth = 0;
+  gTigerFrameCurFBODepth = 0;
 
   // If the widget size changed, we have to force a MakeCurrent
   // to make sure that GL sees the updated widget size.
@@ -1120,8 +1175,38 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
   ShaderProgramOGL *program = GetShaderProgramFor(config);
   ActivateProgram(program);
   program->SetProjectionMatrix(mProjMatrix);
+
   program->SetLayerTransform(aTransform);
   LayerScope::SetLayerTransform(aTransform);
+
+  // TIGER_FLIP: Log draw calls with negative Y-scale in the layer transform
+  {
+    static int negDrawCount = 0;
+    static int totalDrawCount = 0;
+    totalDrawCount++;
+    if (aTransform._22 < 0.0f) {
+      negDrawCount++;
+      if (negDrawCount <= 100 || (negDrawCount % 500) == 0) {
+        const char* effectName = "unknown";
+        switch (aEffectChain.mPrimaryEffect->mType) {
+          case EffectTypes::RGB: effectName = "RGB"; break;
+          case EffectTypes::YCBCR: effectName = "YCBCR"; break;
+          case EffectTypes::RENDER_TARGET: effectName = "RENDER_TARGET"; break;
+          case EffectTypes::SOLID_COLOR: effectName = "SOLID_COLOR"; break;
+          case EffectTypes::COMPONENT_ALPHA: effectName = "COMPONENT_ALPHA"; break;
+          default: break;
+        }
+        fprintf(stderr, "TIGER_FLIP_DRAW: NEG _22=%.4f _11=%.4f _41=%.1f _42=%.1f "
+                "effect=%s clip=[%d,%d,%dx%d] vis=[%.0f,%.0f,%.0fx%.0f] "
+                "drawN=%d totalN=%d\n",
+                aTransform._22, aTransform._11, aTransform._41, aTransform._42,
+                effectName,
+                aClipRect.x, aClipRect.y, aClipRect.width, aClipRect.height,
+                aVisibleRect.x, aVisibleRect.y, aVisibleRect.width, aVisibleRect.height,
+                negDrawCount, totalDrawCount);
+      }
+    }
+  }
 
   if (colorMatrix) {
       EffectColorMatrix* effectColorMatrix =
@@ -1263,6 +1348,25 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
           static_cast<TexturedEffect*>(aEffectChain.mPrimaryEffect.get());
       TextureSource *source = texturedEffect->mTexture;
 
+      // TIGER_DIAG: log RGB draw calls
+      {
+        static int rgbLog = 0;
+        if (rgbLog < 30) {
+          rgbLog++;
+          TextureSourceOGL* srcOGL = source->AsSourceOGL();
+          fprintf(stderr, "TIGER_DRAW: RGB effect, texTarget=%d (2D=%d RECT=%d), format=%d, "
+                  "texSize=%dx%d, texCoords=(%.2f,%.2f)-(%.2f,%.2f), premult=%d\n",
+                  (int)srcOGL->GetTextureTarget(),
+                  (int)LOCAL_GL_TEXTURE_2D, (int)LOCAL_GL_TEXTURE_RECTANGLE_ARB,
+                  (int)source->GetFormat(),
+                  source->GetSize().width, source->GetSize().height,
+                  texturedEffect->mTextureCoords.x, texturedEffect->mTextureCoords.y,
+                  texturedEffect->mTextureCoords.XMost(), texturedEffect->mTextureCoords.YMost(),
+                  (int)texturedEffect->mPremultiplied);
+          fflush(stderr);
+        }
+      }
+
       didSetBlendMode = SetBlendMode(gl(), blendMode, texturedEffect->mPremultiplied);
 
       gfx::SamplingFilter samplingFilter = texturedEffect->mSamplingFilter;
@@ -1283,6 +1387,19 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
 
       BindAndDrawGeometryWithTextureRect(program, aGeometry,
                                          texturedEffect->mTextureCoords, source);
+
+      // TIGER_DIAG: check GL errors after draw
+      {
+        static int drawErrLog = 0;
+        if (drawErrLog < 30) {
+          drawErrLog++;
+          GLenum err = gl()->fGetError();
+          if (err != LOCAL_GL_NO_ERROR) {
+            fprintf(stderr, "TIGER_DRAW: GL ERROR after RGB draw: %d\n", (int)err);
+            fflush(stderr);
+          }
+        }
+      }
     }
     break;
   case EffectTypes::YCBCR: {
@@ -1358,6 +1475,18 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
     }
     break;
   case EffectTypes::RENDER_TARGET: {
+      {
+        static int rtLog = 0;
+        if (rtLog < 20) {
+          rtLog++;
+          fprintf(stderr, "TIGER_FLIP: RENDER_TARGET effect, FBO target=%d, texRect=%d, "
+                  "curFBO=%d\n",
+                  (int)mFBOTextureTarget,
+                  (int)(config.mFeatures & ENABLE_TEXTURE_RECT),
+                  (int)mCurrentRenderTarget->GetFBO());
+          fflush(stderr);
+        }
+      }
       EffectRenderTarget* effectRenderTarget =
         static_cast<EffectRenderTarget*>(aEffectChain.mPrimaryEffect.get());
       RefPtr<CompositingRenderTargetOGL> surface
@@ -1394,6 +1523,15 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
     }
     break;
   case EffectTypes::COMPONENT_ALPHA: {
+      // TIGER_DIAG: log component alpha usage
+      {
+        static int caLog = 0;
+        if (caLog < 10) {
+          caLog++;
+          fprintf(stderr, "TIGER_DRAW: COMPONENT_ALPHA effect used\n");
+          fflush(stderr);
+        }
+      }
       MOZ_ASSERT(gfxPrefs::ComponentAlphaEnabled());
       MOZ_ASSERT(blendMode == gfx::CompositionOp::OP_OVER, "Can't support blend modes with component alpha!");
       EffectComponentAlpha* effectComponentAlpha =
@@ -1602,6 +1740,70 @@ CompositorOGL::EndFrame()
     mCurrentRenderTarget = nullptr;
     Compositor::EndFrame();
     return;
+  }
+
+  // Tiger flip diagnostic: read back pixels from the back buffer before swap.
+  // GL y=height-1 is the TOP of the screen (toolbar area).
+  // GL y=0 is the BOTTOM of the screen (page bottom).
+  // If toolbar grey (~200) appears at y=0 instead of y=height-1, the compositor
+  // output is flipped in the back buffer itself.
+  {
+    static int frameCount = 0;
+    static bool lastTopIsToolbar = false;
+    frameCount++;
+
+    GLint vp[4];
+    mGLContext->fGetIntegerv(LOCAL_GL_VIEWPORT, vp);
+    int vpW = vp[2], vpH = vp[3];
+
+    // Read every 10 frames to limit perf impact
+    if (vpW > 0 && vpH > 0 && (frameCount % 10) == 0) {
+      uint8_t topPixel[4] = {0,0,0,0};
+      uint8_t botPixel[4] = {0,0,0,0};
+      // Bind default framebuffer for readback
+      mGLContext->fBindFramebuffer(LOCAL_GL_FRAMEBUFFER, 0);
+      mGLContext->fReadPixels(vpW / 2, vpH - 1, 1, 1,
+                              LOCAL_GL_RGBA, LOCAL_GL_UNSIGNED_BYTE, topPixel);
+      mGLContext->fReadPixels(vpW / 2, 0, 1, 1,
+                              LOCAL_GL_RGBA, LOCAL_GL_UNSIGNED_BYTE, botPixel);
+
+      // Toolbar grey: all channels > 150, close to each other
+      bool topIsGrey = (topPixel[0] > 150 && topPixel[1] > 150 && topPixel[2] > 150 &&
+                        abs((int)topPixel[0] - (int)topPixel[1]) < 30 &&
+                        abs((int)topPixel[1] - (int)topPixel[2]) < 30);
+      bool botIsGrey = (botPixel[0] > 150 && botPixel[1] > 150 && botPixel[2] > 150 &&
+                        abs((int)botPixel[0] - (int)botPixel[1]) < 30 &&
+                        abs((int)botPixel[1] - (int)botPixel[2]) < 30);
+
+      // Detect flip transitions: toolbar should be at the TOP of the GL buffer
+      bool topIsToolbar = topIsGrey;
+
+      if (frameCount > 30 && topIsToolbar != lastTopIsToolbar) {
+        fprintf(stderr, "TIGER_FLIP: *** TRANSITION at frame %d! "
+                "top=(%d,%d,%d,%d) grey=%d  bot=(%d,%d,%d,%d) grey=%d  "
+                "toolbar_was_top=%d now=%d  FBO_switches=%d maxDepth=%d  -> %s\n",
+                frameCount,
+                topPixel[0], topPixel[1], topPixel[2], topPixel[3], (int)topIsGrey,
+                botPixel[0], botPixel[1], botPixel[2], botPixel[3], (int)botIsGrey,
+                (int)lastTopIsToolbar, (int)topIsToolbar,
+                gTigerFrameFBOSwitches, gTigerFrameMaxFBODepth,
+                topIsToolbar ? "CORRECT" : "FLIPPED-IN-BACKBUFFER");
+        fflush(stderr);
+      }
+
+      // Periodic status every 300 frames (~5 sec at 60fps, ~30 sec at 10fps)
+      if ((frameCount % 300) == 0) {
+        fprintf(stderr, "TIGER_FLIP: frame %d  top=(%d,%d,%d,%d) grey=%d  "
+                "bot=(%d,%d,%d,%d) grey=%d  toolbar_at_top=%d  FBO_sw=%d maxD=%d\n",
+                frameCount,
+                topPixel[0], topPixel[1], topPixel[2], topPixel[3], (int)topIsGrey,
+                botPixel[0], botPixel[1], botPixel[2], botPixel[3], (int)botIsGrey,
+                (int)topIsToolbar, gTigerFrameFBOSwitches, gTigerFrameMaxFBODepth);
+        fflush(stderr);
+      }
+
+      lastTopIsToolbar = topIsToolbar;
+    }
   }
 
   mCurrentRenderTarget = nullptr;

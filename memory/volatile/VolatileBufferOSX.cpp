@@ -13,6 +13,12 @@
 
 #define MIN_VOLATILE_ALLOC_SIZE 8192
 
+/* VM_VOLATILE_GROUP_DEFAULT is 10.9+. On older systems, the default group
+   is 0 and vm_purgable_control with VM_PURGABLE_VOLATILE still works. */
+#ifndef VM_VOLATILE_GROUP_DEFAULT
+#define VM_VOLATILE_GROUP_DEFAULT 0
+#endif
+
 namespace mozilla {
 
 VolatileBuffer::VolatileBuffer()

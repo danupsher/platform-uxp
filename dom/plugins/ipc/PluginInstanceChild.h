@@ -498,7 +498,9 @@ private:
 #endif
     CGColorSpaceRef               mShColorSpace;
     CGContextRef                  mShContext;
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     RefPtr<nsCARenderer> mCARenderer;
+#endif
     void                         *mCGLayer;
 
     // Core Animation drawing model requires a refresh timer.
@@ -611,10 +613,10 @@ private:
     // surface which is on ParentProcess side
     RefPtr<gfxASurface> mBackSurface;
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     // Current IOSurface available for rendering
     // We can't use thebes gfxASurface like other platforms.
-    PluginUtilsOSX::nsDoubleBufferCARenderer mDoubleBufferCARenderer; 
+    PluginUtilsOSX::nsDoubleBufferCARenderer mDoubleBufferCARenderer;
 #endif
 
     // (Not to be confused with mBackSurface).  This is a recent copy

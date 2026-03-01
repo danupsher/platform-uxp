@@ -46,7 +46,7 @@
 #endif
 #endif
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 #include "mozilla/layers/MacIOSurfaceTextureClientOGL.h"
 #endif
 
@@ -1064,7 +1064,7 @@ TextureClient::CreateForDrawing(TextureForwarder* aAllocator,
 #endif
 #endif
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
   if (!data && gfxPrefs::UseIOSurfaceTextures()) {
     data = MacIOSurfaceTextureData::Create(aSize, aFormat, moz2DBackend);
   }

@@ -3,10 +3,13 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-# Build mozglue as a shared lib on Windows, OSX.
+# Build mozglue as a shared lib on Windows, OSX (10.5+).
 # If this is ever changed, update MOZ_SHARED_MOZGLUE in browser/installer/Makefile.in
-if CONFIG['OS_TARGET'] in ('WINNT', 'Darwin'):
+if CONFIG['OS_TARGET'] == 'WINNT':
     SharedLibrary('mozglue')
+elif CONFIG['OS_TARGET'] == 'Darwin':
+    # Use static lib for Tiger (10.4) to avoid dylib relocation issues
+    Library('mozglue')
 else:
     Library('mozglue')
 

@@ -49,7 +49,7 @@
 # include "mozilla/layers/TextureD3D11.h"
 #endif
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 #include "MacIOSurfaceImage.h"
 #endif
 
@@ -77,6 +77,14 @@ using namespace mozilla::plugins;
 using namespace mozilla::layers;
 using namespace mozilla::gfx;
 using namespace mozilla::gl;
+
+// On 10.4/10.5 Tiger/Leopard, CreateSystemColorSpace is not available
+// (defined in QuartzSupport.mm which is 10.6+ only). Provide a fallback.
+#if defined(XP_MACOSX) && (!defined(MAC_OS_X_VERSION_10_6) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6))
+static CGColorSpaceRef CreateSystemColorSpace() {
+    return CGColorSpaceCreateDeviceRGB();
+}
+#endif
 
 void
 StreamNotifyParent::ActorDestroy(ActorDestroyReason aWhy)
@@ -886,7 +894,7 @@ PluginInstanceParent::RecvShow(const NPRect& updatedRect,
         }
         surface = gfxSharedImageSurface::Open(newSurface.get_Shmem());
     }
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     else if (newSurface.type() == SurfaceDescriptor::TIOSurfaceDescriptor) {
         IOSurfaceDescriptor iodesc = newSurface.get_IOSurfaceDescriptor();
 
@@ -1026,7 +1034,7 @@ PluginInstanceParent::GetImageContainer(ImageContainer** aContainer)
         return NS_OK;
     }
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     MacIOSurface* ioSurface = nullptr;
 
     if (mFrontIOSurface) {
@@ -1047,7 +1055,7 @@ PluginInstanceParent::GetImageContainer(ImageContainer** aContainer)
         return NS_ERROR_FAILURE;
     }
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     if (ioSurface) {
         RefPtr<Image> image = new MacIOSurfaceImage(ioSurface);
         container->SetCurrentImageInTransaction(image);
@@ -1080,7 +1088,7 @@ PluginInstanceParent::GetImageSize(nsIntSize* aSize)
         return NS_OK;
     }
 
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     if (mFrontIOSurface) {
         *aSize = nsIntSize(mFrontIOSurface->GetWidth(), mFrontIOSurface->GetHeight());
         return NS_OK;
@@ -1378,11 +1386,14 @@ PluginInstanceParent::NPP_SetWindow(const NPWindow* aWindow)
 #endif
 #if defined(XP_MACOSX)
     if (mShWidth != window.width * scaleFactor || mShHeight != window.height * scaleFactor) {
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
         if (mDrawingModel == NPDrawingModelCoreAnimation ||
             mDrawingModel == NPDrawingModelInvalidatingCoreAnimation) {
             mIOSurface = MacIOSurface::CreateIOSurface(window.width, window.height,
                                                        floatScaleFactor);
-        } else if (uint32_t(mShWidth * mShHeight) !=
+        } else
+#endif
+        if (uint32_t(mShWidth * mShHeight) !=
                    window.width * scaleFactor * window.height * scaleFactor) {
             if (mShWidth != 0 && mShHeight != 0) {
                 DeallocShmem(mShSurface);
@@ -1662,6 +1673,7 @@ PluginInstanceParent::NPP_HandleEvent(void* event)
 
 #ifdef XP_MACOSX
     if (npevent->type == NPCocoaEventDrawRect) {
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
         if (mDrawingModel == NPDrawingModelCoreAnimation ||
             mDrawingModel == NPDrawingModelInvalidatingCoreAnimation) {
             if (!mIOSurface) {
@@ -1708,7 +1720,9 @@ PluginInstanceParent::NPP_HandleEvent(void* event)
                                                      npevent->data.draw.height);
             }
             return true;
-        } else {
+        } else
+#endif // 10.6+
+        {
             if (mShWidth == 0 && mShHeight == 0) {
                 PLUGIN_LOG_DEBUG(("NPCocoaEventDrawRect on window of size 0."));
                 return false;

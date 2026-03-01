@@ -112,6 +112,13 @@ static const TCHAR kPluginIgnoreSubclassProperty[] = TEXT("PluginIgnoreSubclassP
 #elif defined(XP_MACOSX)
 #include <ApplicationServices/ApplicationServices.h>
 #include "PluginUtilsOSX.h"
+#include <AvailabilityMacros.h>
+#if !defined(MAC_OS_X_VERSION_10_6) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6)
+/* Stub CreateSystemColorSpace for pre-10.6 (normally in QuartzSupport.mm) */
+static CGColorSpaceRef CreateSystemColorSpace() {
+    return CGColorSpaceCreateDeviceRGB();
+}
+#endif
 #endif // defined(XP_MACOSX)
 
 /**
@@ -245,7 +252,9 @@ PluginInstanceChild::~PluginInstanceChild()
         ::CGContextRelease(mShContext);
     }
     if (mCGLayer) {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
         PluginUtilsOSX::ReleaseCGLayer(mCGLayer);
+#endif
     }
     if (mDrawingModel == NPDrawingModelCoreAnimation) {
         UnscheduleTimer(mCARefreshTimer);
@@ -1091,6 +1100,7 @@ PluginInstanceChild::CGDraw(CGContextRef ref, nsIntRect aUpdateRect) {
   return handled == true;
 }
 
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 bool
 PluginInstanceChild::AnswerNPP_HandleEvent_IOSurface(const NPRemoteEvent& event,
                                                      const uint32_t &surfaceid,
@@ -1153,6 +1163,16 @@ PluginInstanceChild::AnswerNPP_HandleEvent_IOSurface(const NPRemoteEvent& event,
     return true;
 
 }
+#else /* pre-10.6 macOS — no IOSurface */
+bool
+PluginInstanceChild::AnswerNPP_HandleEvent_IOSurface(const NPRemoteEvent& event,
+                                                     const uint32_t &surfaceid,
+                                                     int16_t* handled)
+{
+    NS_RUNTIMEABORT("NPP_HandleEvent_IOSurface requires 10.6+");
+    return false;
+}
+#endif /* MAC_OS_X_VERSION >= 10.6 */
 
 #else
 bool
@@ -3575,7 +3595,7 @@ PluginInstanceChild::EnsureCurrentBuffer(void)
     }
 
     return true;
-#elif defined(XP_MACOSX)
+#elif defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 
     if (!mDoubleBufferCARenderer.HasCALayer()) {
         void *caLayer = nullptr;
@@ -3996,7 +4016,7 @@ PluginInstanceChild::ShowPluginFrame()
         return false;
     }
 
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     // We can't use the thebes code with CoreAnimation so we will
     // take a different code path.
     if (mDrawingModel == NPDrawingModelCoreAnimation ||
@@ -4455,7 +4475,7 @@ PluginInstanceChild::SwapSurfaces()
     mBackSurfaceActor = tmpactor;
 #endif
 
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     mDoubleBufferCARenderer.SwapSurfaces();
 
     // Outdated back surface... not usable anymore due to changed plugin size.
@@ -4484,7 +4504,7 @@ void
 PluginInstanceChild::ClearCurrentSurface()
 {
     mCurrentSurface = nullptr;
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     if (mDoubleBufferCARenderer.HasFrontSurface()) {
         mDoubleBufferCARenderer.ClearFrontSurface();
     }
@@ -4526,7 +4546,7 @@ PluginInstanceChild::ClearAllSurfaces()
     }
 #endif
 
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     if (mDoubleBufferCARenderer.HasBackSurface()) {
         // Get last surface back, and drop it
         SurfaceDescriptor temp = null_t();

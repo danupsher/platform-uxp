@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <AvailabilityMacros.h>
 #include <stdint.h>
 #include "nsDebug.h"
 #include "nscore.h"
@@ -16,6 +17,7 @@ NS_GetComplexLineBreaks(const char16_t* aText, uint32_t aLength,
 
   memset(aBreakBefore, 0, aLength * sizeof(uint8_t));
 
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   CFStringRef str = ::CFStringCreateWithCharactersNoCopy(kCFAllocatorDefault, reinterpret_cast<const UniChar*>(aText), aLength, kCFAllocatorNull);
   if (!str) {
     return;
@@ -41,4 +43,14 @@ NS_GetComplexLineBreaks(const char16_t* aText, uint32_t aLength,
 
   ::CFRelease(st);
   ::CFRelease(str);
+#else
+  /* Tiger: CFStringTokenizer not available.
+     Simple fallback: break at spaces and newlines. */
+  for (uint32_t i = 1; i < aLength; i++) {
+    char16_t ch = aText[i - 1];
+    if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
+      aBreakBefore[i] = true;
+    }
+  }
+#endif
 }

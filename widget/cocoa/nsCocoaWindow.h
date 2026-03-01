@@ -78,7 +78,11 @@ typedef struct _nsCocoaWindowList {
   // descendants to use.
   float mDPI;
 
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   NSTrackingArea* mTrackingArea;
+#else
+  id mTrackingArea;  // placeholder for Tiger (NSTrackingArea is 10.5+)
+#endif
   NSView* mViewWithTrackingArea;
 
   NSRect mDirtyRect;

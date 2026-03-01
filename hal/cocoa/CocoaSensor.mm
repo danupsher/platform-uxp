@@ -54,6 +54,7 @@ UpdateHandler(nsITimer *aTimer, void *aClosure)
       values.AppendElement(accel.y * MEAN_GRAVITY);
       values.AppendElement(accel.z * MEAN_GRAVITY);
     } else if (sensor == SENSOR_LIGHT && sDataPort != IO_OBJECT_NULL) {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
       kern_return_t kr;
       uint32_t outputs = 2;
       uint64_t lightLMU[outputs];
@@ -69,6 +70,9 @@ UpdateHandler(nsITimer *aTimer, void *aClosure)
       } else if (kr == kIOReturnBusy) {
         continue;
       }
+#else
+      continue; // IOConnectCallMethod not available on Tiger
+#endif
     }
 
     hal::SensorData sdata(sensor,

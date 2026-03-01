@@ -5,6 +5,11 @@
 
 #include "SharedSurfaceIO.h"
 
+#include <AvailabilityMacros.h>
+
+/* IOSurface is 10.6+.  Guard this entire file. */
+#if defined(MAC_OS_X_VERSION_10_6) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6
+
 #include "GLContextCGL.h"
 #include "mozilla/DebugOnly.h"
 #include "mozilla/gfx/MacIOSurface.h"
@@ -246,3 +251,5 @@ SurfaceFactory_IOSurface::CreateShared(const gfx::IntSize& size)
 
 } // namespace gl
 } // namespace mozilla
+
+#endif /* MAC_OS_X_VERSION >= 10.6 */

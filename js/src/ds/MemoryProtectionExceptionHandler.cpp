@@ -17,6 +17,9 @@
 #elif defined(XP_DARWIN)
 # include <mach/mach.h>
 # include <unistd.h>
+# ifndef MACH_EXCEPTION_CODES
+#  define MACH_EXCEPTION_CODES 0x80000000
+# endif
 #endif
 
 #include "ds/SplayTree.h"

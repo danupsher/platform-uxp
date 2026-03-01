@@ -66,7 +66,7 @@ add_old_configure_assignment('YASM', have_yasm)
 # This needs to happen before any compilation test is done.
 
 option('--enable-macos-target', env='MACOSX_DEPLOYMENT_TARGET', nargs=1,
-       default='10.7', help='Set the minimum MacOS version needed at runtime')
+       default='10.4', help='Set the minimum MacOS version needed at runtime')
 
 @depends('--enable-macos-target', target)
 @imports(_from='os', _import='environ')
@@ -695,9 +695,9 @@ def compiler(language, host_or_target, c_compiler=None, other_compiler=None,
         # Check the compiler version here instead of in `compiler_version` so
         # that the `checking` message doesn't pretend the compiler can be used
         # to then bail out one line later.
-        if info.type == 'gcc' and info.version < '9.1.0':
+        if info.type == 'gcc' and info.version < '4.9.0':
             raise FatalCheckError(
-                'Only GCC 9.1 or newer is supported (found version %s).'
+                'Only GCC 4.9 or newer is supported (found version %s).'
                 % info.version)
 
         # If you want to bump the version check here search for

@@ -195,6 +195,9 @@
 # include <sys/mman.h>
 # include <unistd.h>
 #endif
+#ifdef XP_MACOSX
+# include <sys/sysctl.h>
+#endif
 
 #include "jsapi.h"
 #include "jsatom.h"
@@ -3070,6 +3073,13 @@ js::GetCPUCount()
         SYSTEM_INFO sysinfo;
         GetSystemInfo(&sysinfo);
         ncpus = unsigned(sysinfo.dwNumberOfProcessors);
+# elif defined(XP_MACOSX) && (!defined(_SC_NPROCESSORS_ONLN))
+        /* Tiger lacks _SC_NPROCESSORS_ONLN; use sysctl HW_NCPU */
+        int mib[2] = {CTL_HW, HW_NCPU};
+        int cpuCount = 1;
+        size_t len = sizeof(cpuCount);
+        sysctl(mib, 2, &cpuCount, &len, nullptr, 0);
+        ncpus = (cpuCount > 0) ? unsigned(cpuCount) : 1;
 # else
         long n = sysconf(_SC_NPROCESSORS_ONLN);
         ncpus = (n > 0) ? unsigned(n) : 1;

@@ -175,11 +175,20 @@ BasicTextureImage::Resize(const gfx::IntSize& aSize)
         type = LOCAL_GL_UNSIGNED_BYTE;
     }
 
+    // TIGER FIX: On GL without NPOT support, allocate POT-sized texture.
+    // Content size (mSize) stays as requested; the GL texture is larger.
+    GLsizei allocWidth = aSize.width;
+    GLsizei allocHeight = aSize.height;
+    if (!CanUploadNonPowerOfTwo(mGLContext)) {
+        allocWidth = RoundUpPow2((uint32_t)aSize.width);
+        allocHeight = RoundUpPow2((uint32_t)aSize.height);
+    }
+
     mGLContext->fTexImage2D(LOCAL_GL_TEXTURE_2D,
                             0,
                             LOCAL_GL_RGBA,
-                            aSize.width,
-                            aSize.height,
+                            allocWidth,
+                            allocHeight,
                             0,
                             format,
                             type,

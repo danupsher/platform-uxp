@@ -69,7 +69,7 @@ int32_t nsCocoaFeatures::ExtractBugFixVersion(int32_t aVersion)
 
 static int intAtStringIndex(NSArray *array, int index)
 {
-  return [(NSString*)[array objectAtIndex:index] integerValue];
+  return [(NSString*)[array objectAtIndex:index] intValue];
 }
 
 void nsCocoaFeatures::GetSystemVersion(int &major, int &minor, int &bugfix)

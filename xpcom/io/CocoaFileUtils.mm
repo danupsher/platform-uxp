@@ -63,7 +63,7 @@ nsresult GetFileCreatorCode(CFURLRef url, OSType *creatorCode)
     return NS_ERROR_FAILURE;
   }
 
-  NSDictionary* dict = [[NSFileManager defaultManager] attributesOfItemAtPath:resolvedPath error:nil];
+  NSDictionary* dict = [[NSFileManager defaultManager] fileAttributesAtPath:resolvedPath traverseLink:YES];
   if (!dict) {
     return NS_ERROR_FAILURE;
   }
@@ -88,7 +88,7 @@ nsresult SetFileCreatorCode(CFURLRef url, OSType creatorCode)
 
   NSAutoreleasePool* ap = [[NSAutoreleasePool alloc] init];
   NSDictionary* dict = [NSDictionary dictionaryWithObject:[NSNumber numberWithUnsignedLong:creatorCode] forKey:NSFileHFSCreatorCode];
-  BOOL success = [[NSFileManager defaultManager] setAttributes:dict ofItemAtPath:[(NSURL*)url path] error:nil];
+  BOOL success = [[NSFileManager defaultManager] changeFileAttributes:dict atPath:[(NSURL*)url path]];
   [ap release];
   return (success ? NS_OK : NS_ERROR_FAILURE);
 
@@ -109,7 +109,7 @@ nsresult GetFileTypeCode(CFURLRef url, OSType *typeCode)
     return NS_ERROR_FAILURE;
   }
 
-  NSDictionary* dict = [[NSFileManager defaultManager] attributesOfItemAtPath:resolvedPath error:nil];
+  NSDictionary* dict = [[NSFileManager defaultManager] fileAttributesAtPath:resolvedPath traverseLink:YES];
   if (!dict) {
     return NS_ERROR_FAILURE;
   }
@@ -134,7 +134,7 @@ nsresult SetFileTypeCode(CFURLRef url, OSType typeCode)
 
   NSAutoreleasePool* ap = [[NSAutoreleasePool alloc] init];
   NSDictionary* dict = [NSDictionary dictionaryWithObject:[NSNumber numberWithUnsignedLong:typeCode] forKey:NSFileHFSTypeCode];
-  BOOL success = [[NSFileManager defaultManager] setAttributes:dict ofItemAtPath:[(NSURL*)url path] error:nil];
+  BOOL success = [[NSFileManager defaultManager] changeFileAttributes:dict atPath:[(NSURL*)url path]];
   [ap release];
   return (success ? NS_OK : NS_ERROR_FAILURE);
 
@@ -261,8 +261,7 @@ void AddQuarantineMetadataToFile(const CFStringRef filePath,
 CFURLRef GetTemporaryFolderCFURLRef()
 {
   NSString* tempDir = ::NSTemporaryDirectory();
-  return tempDir == nil ? NULL : (CFURLRef)[NSURL fileURLWithPath:tempDir
-                                                      isDirectory:YES];
+  return tempDir == nil ? NULL : (CFURLRef)[NSURL fileURLWithPath:tempDir];
 }
 
 } // namespace CocoaFileUtils

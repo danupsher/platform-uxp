@@ -440,11 +440,15 @@ nsAutoLowPriorityIO::nsAutoLowPriorityIO()
   lowIOPrioritySet = SetThreadPriority(GetCurrentThread(),
                                        THREAD_MODE_BACKGROUND_BEGIN);
 #elif defined(XP_MACOSX)
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   oldPriority = getiopolicy_np(IOPOL_TYPE_DISK, IOPOL_SCOPE_THREAD);
   lowIOPrioritySet = oldPriority != -1 &&
                      setiopolicy_np(IOPOL_TYPE_DISK,
                                     IOPOL_SCOPE_THREAD,
                                     IOPOL_THROTTLE) != -1;
+#else
+  lowIOPrioritySet = false;
+#endif
 #else
   lowIOPrioritySet = false;
 #endif
@@ -458,8 +462,10 @@ nsAutoLowPriorityIO::~nsAutoLowPriorityIO()
     SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
   }
 #elif defined(XP_MACOSX)
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   if (MOZ_LIKELY(lowIOPrioritySet)) {
     setiopolicy_np(IOPOL_TYPE_DISK, IOPOL_SCOPE_THREAD, oldPriority);
   }
+#endif
 #endif
 }

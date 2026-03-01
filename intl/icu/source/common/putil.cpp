@@ -51,6 +51,15 @@
  */
 #include <time.h>
 
+/* Tiger's <time.h> hides localtime_r/gmtime_r when _POSIX_C_SOURCE is defined
+ * (set implicitly by _XOPEN_SOURCE 600 via sys/cdefs.h). Declare explicitly. */
+#if defined(__APPLE__)
+extern "C" {
+struct tm *localtime_r(const time_t *, struct tm *);
+struct tm *gmtime_r(const time_t *, struct tm *);
+}
+#endif
+
 #if !U_PLATFORM_USES_ONLY_WIN32_API
 #include <sys/time.h>
 #endif

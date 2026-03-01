@@ -139,7 +139,11 @@ NS_IMETHODIMP nsPrintSettingsX::ReadPageFormatFromPrefs()
     return NS_ERROR_FAILURE;
 
   PMPageFormat newPageFormat;
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   OSStatus status = ::PMPageFormatCreateWithDataRepresentation((CFDataRef)data, &newPageFormat);
+#else
+  OSStatus status = ::PMUnflattenPageFormatWithCFData((CFDataRef)data, &newPageFormat);
+#endif
   if (status == noErr) {
     SetPMPageFormat(newPageFormat);
   }
@@ -159,7 +163,11 @@ NS_IMETHODIMP nsPrintSettingsX::WritePageFormatToPrefs()
     return NS_ERROR_NOT_INITIALIZED;
 
   NSData* data = nil;
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   OSStatus err = ::PMPageFormatCreateDataRepresentation(pageFormat, (CFDataRef*)&data, kPMDataFormatXMLDefault);
+#else
+  OSStatus err = ::PMFlattenPageFormatToCFData(pageFormat, (CFDataRef*)&data);
+#endif
   if (err != noErr)
     return NS_ERROR_FAILURE;
 
@@ -198,19 +206,19 @@ NS_IMETHODIMP nsPrintSettingsX::_Assign(nsIPrintSettings *aPS)
 PMPrintSettings
 nsPrintSettingsX::GetPMPrintSettings()
 {
-  return static_cast<PMPrintSettings>([mPrintInfo PMPrintSettings]);
+  return (PMPrintSettings)[mPrintInfo PMPrintSettings];
 }
 
 PMPrintSession
 nsPrintSettingsX::GetPMPrintSession()
 {
-  return static_cast<PMPrintSession>([mPrintInfo PMPrintSession]);
+  return (PMPrintSession)[mPrintInfo PMPrintSession];
 }
 
 PMPageFormat
 nsPrintSettingsX::GetPMPageFormat()
 {
-  return static_cast<PMPageFormat>([mPrintInfo PMPageFormat]);
+  return (PMPageFormat)[mPrintInfo PMPageFormat];
 }
 
 void

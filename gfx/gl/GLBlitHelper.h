@@ -19,7 +19,9 @@ class Image;
 class PlanarYCbCrImage;
 class GrallocImage;
 class SurfaceTextureImage;
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 class MacIOSurfaceImage;
+#endif
 class EGLImageImage;
 } // namespace layers
 
@@ -107,7 +109,7 @@ class GLBlitHelper final
     void BindAndUploadEGLImage(EGLImage image, GLuint target);
 
     bool BlitPlanarYCbCrImage(layers::PlanarYCbCrImage* yuvImage);
-#ifdef XP_MACOSX
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
     bool BlitMacIOSurfaceImage(layers::MacIOSurfaceImage* ioImage);
 #endif
 

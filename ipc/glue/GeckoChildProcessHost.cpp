@@ -184,6 +184,7 @@ nsresult GeckoChildProcessHost::GetArchitecturesForBinary(const char *path, uint
   *result = 0;
 
 #ifdef MOZ_WIDGET_COCOA
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
   CFURLRef url = ::CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault,
                                                            (const UInt8*)path,
                                                            strlen(path),
@@ -222,6 +223,11 @@ nsresult GeckoChildProcessHost::GetArchitecturesForBinary(const char *path, uint
   }
 
   return (*result ? NS_OK : NS_ERROR_FAILURE);
+#else
+  // Tiger (10.4): assume PPC since that's all Tiger runs on
+  *result |= base::PROCESS_ARCH_PPC;
+  return NS_OK;
+#endif /* MAC_OS_X_VERSION >= 10.5 */
 #else
   return NS_ERROR_NOT_IMPLEMENTED;
 #endif

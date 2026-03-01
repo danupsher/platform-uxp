@@ -2107,6 +2107,13 @@ gfxPlatform::InitCompositorAccelerationPrefs()
     feature.ForceDisable(FeatureStatus::Blocked, "Acceleration blocked by safe-mode",
                          NS_LITERAL_CSTRING("FEATURE_FAILURE_COMP_SAFEMODE"));
   }
+
+  fprintf(stderr, "TIGER_COMP: InitCompositorAccelerationPrefs: HW_COMPOSITING=%d, accelByDefault=%d, accelPref=%d, forcePref=%d, safeMode=%d\n",
+          (int)gfxConfig::IsEnabled(Feature::HW_COMPOSITING),
+          (int)AccelerateLayersByDefault(),
+          (int)gfxPrefs::LayersAccelerationEnabledDoNotUseDirectly(),
+          (int)gfxPrefs::LayersAccelerationForceEnabledDoNotUseDirectly(),
+          (int)InSafeMode());
 }
 
 bool
@@ -2277,9 +2284,11 @@ void
 gfxPlatform::GetAcceleratedCompositorBackends(nsTArray<LayersBackend>& aBackends)
 {
   if (gfxConfig::IsEnabled(Feature::OPENGL_COMPOSITING)) {
+    fprintf(stderr, "TIGER_COMP: OPENGL_COMPOSITING enabled, adding LAYERS_OPENGL\n");
     aBackends.AppendElement(LayersBackend::LAYERS_OPENGL);
   }
   else {
+    fprintf(stderr, "TIGER_COMP: OPENGL_COMPOSITING disabled!\n");
     static int tell_me_once = 0;
     if (!tell_me_once) {
       NS_WARNING("OpenGL-accelerated layers are not supported on this system");
@@ -2291,10 +2300,12 @@ gfxPlatform::GetAcceleratedCompositorBackends(nsTArray<LayersBackend>& aBackends
 void
 gfxPlatform::GetCompositorBackends(bool useAcceleration, nsTArray<mozilla::layers::LayersBackend>& aBackends)
 {
+  fprintf(stderr, "TIGER_COMP: GetCompositorBackends useAcceleration=%d\n", (int)useAcceleration);
   if (useAcceleration) {
     GetAcceleratedCompositorBackends(aBackends);
   }
   aBackends.AppendElement(LayersBackend::LAYERS_BASIC);
+  fprintf(stderr, "TIGER_COMP: GetCompositorBackends returning %d backends\n", (int)aBackends.Length());
 }
 
 void
@@ -2408,7 +2419,11 @@ gfxPlatform::InitOpenGLConfig()
   nsCString failureId;
   if (!IsGfxInfoStatusOkay(nsIGfxInfo::FEATURE_OPENGL_LAYERS, &message, failureId)) {
     openGLFeature.Disable(FeatureStatus::Blacklisted, message.get(), failureId);
+    fprintf(stderr, "TIGER_COMP: OpenGL BLACKLISTED: %s\n", message.get());
   }
+
+  fprintf(stderr, "TIGER_COMP: InitOpenGLConfig done: OPENGL_COMPOSITING=%d\n",
+          (int)gfxConfig::IsEnabled(Feature::OPENGL_COMPOSITING));
 }
 
 bool

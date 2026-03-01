@@ -107,8 +107,8 @@ NativeMenuItemWithLocation(NSMenu * currentSubmenu, NSString * locationString)
     return nil;
 
   for (NSUInteger i = 0; i < indexCount; i++) {
-    NSInteger targetIndex = [[indexes objectAtIndex:i] integerValue];
-    NSInteger itemCount = [currentSubmenu numberOfItems];
+    int targetIndex = [[indexes objectAtIndex:i] intValue];
+    int itemCount = [currentSubmenu numberOfItems];
     if (targetIndex < itemCount) {
       NSMenuItem* menuItem = [currentSubmenu itemAtIndex:targetIndex];
 

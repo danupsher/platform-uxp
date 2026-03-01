@@ -10,6 +10,57 @@
 
 #import <Carbon/Carbon.h>
 #import <Cocoa/Cocoa.h>
+
+/* Tiger (10.4) doesn't have the Text Input Sources (TIS) API — it was
+   introduced in 10.5.  Provide stub type/function/constant definitions.
+   All TIS functions return NULL; TISInputSourceWrapper methods check for
+   NULL mInputSource via NS_ENSURE_TRUE and degrade gracefully. */
+#if !defined(MAC_OS_X_VERSION_10_5) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+typedef struct __TISInputSource* TISInputSourceRef;
+
+#define kTISPropertyInputSourceID CFSTR("TISPropertyInputSourceID")
+#define kTISPropertyInputSourceIsASCIICapable CFSTR("TISPropertyInputSourceIsASCIICapable")
+#define kTISPropertyInputSourceIsEnabled CFSTR("TISPropertyInputSourceIsEnabled")
+#define kTISPropertyLocalizedName CFSTR("TISPropertyLocalizedName")
+#define kTISPropertyBundleID CFSTR("TISPropertyBundleID")
+#define kTISPropertyInputSourceType CFSTR("TISPropertyInputSourceType")
+#define kTISPropertyUnicodeKeyLayoutData CFSTR("TISPropertyUnicodeKeyLayoutData")
+#define kTISPropertyInputSourceLanguages CFSTR("TISPropertyInputSourceLanguages")
+#define kTISPropertyInputSourceIsSelectCapable CFSTR("TISPropertyInputSourceIsSelectCapable")
+#define kTISPropertyInputSourceCategory CFSTR("TISPropertyInputSourceCategory")
+#define kTISTypeKeyboardLayout CFSTR("TISTypeKeyboardLayout")
+#define kTISTypeKeyboardInputMode CFSTR("TISTypeKeyboardInputMode")
+#define kTISTypeKeyboardInputMethodWithoutModes CFSTR("TISTypeKeyboardInputMethodWithoutModes")
+
+static inline TISInputSourceRef TISCopyCurrentKeyboardInputSource(void) { return 0; }
+static inline TISInputSourceRef TISCopyCurrentKeyboardLayoutInputSource(void) { return 0; }
+static inline TISInputSourceRef TISCopyCurrentASCIICapableKeyboardInputSource(void) { return 0; }
+static inline TISInputSourceRef TISCopyCurrentASCIICapableKeyboardLayoutInputSource(void) { return 0; }
+static inline TISInputSourceRef TISCopyInputMethodKeyboardLayoutOverride(void) { return 0; }
+static inline TISInputSourceRef TISCopyInputSourceForLanguage(CFStringRef l) { (void)l; return 0; }
+static inline CFArrayRef TISCreateInputSourceList(CFDictionaryRef p, Boolean a) { (void)p; (void)a; return 0; }
+static inline CFArrayRef TISCreateASCIICapableInputSourceList(void) { return 0; }
+static inline void* TISGetInputSourceProperty(TISInputSourceRef s, CFStringRef k) { (void)s; (void)k; return 0; }
+static inline OSStatus TISSelectInputSource(TISInputSourceRef s) { (void)s; return -1; }
+
+/* TSM property tags (10.5+) */
+#ifndef kTSMDocumentEnabledInputSourcesPropertyTag
+#define kTSMDocumentEnabledInputSourcesPropertyTag 'enbl'
+#endif
+
+/* NSMarkedClauseSegment attribute (10.5+) */
+#ifndef NSMarkedClauseSegmentAttributeName
+#define NSMarkedClauseSegmentAttributeName @"NSMarkedClauseSegment"
+#endif
+
+/* CFLocaleCopyPreferredLanguages (10.5+) */
+static inline CFArrayRef CFLocaleCopyPreferredLanguages(void) { return 0; }
+
+/* TIS notification constants (10.5+) */
+#define kTISNotifySelectedKeyboardInputSourceChanged CFSTR("com.apple.Carbon.TISNotifySelectedKeyboardInputSourceChanged")
+
+#endif /* pre-10.5 TIS stubs */
+
 #include "mozView.h"
 #include "nsString.h"
 #include "nsCOMPtr.h"

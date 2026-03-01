@@ -4,6 +4,62 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "OSXNotificationCenter.h"
+
+#include <AvailabilityMacros.h>
+
+// NSUserNotification is 10.8+. On earlier systems, provide a stub implementation
+// that returns NS_ERROR_FAILURE from Init(). Also avoids a GCC ICE on the
+// @property declarations in the fake protocol below.
+#if !defined(MAC_OS_X_VERSION_10_8) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_8)
+
+#include "nsObjCExceptions.h"
+
+namespace mozilla {
+
+NS_IMPL_ISUPPORTS(OSXNotificationCenter, nsIAlertsService, nsIAlertsIconData,
+                  nsIAlertNotificationImageListener)
+
+OSXNotificationCenter::OSXNotificationCenter() : mDelegate(nil) {}
+OSXNotificationCenter::~OSXNotificationCenter() {}
+nsresult OSXNotificationCenter::Init() { return NS_ERROR_FAILURE; }
+void OSXNotificationCenter::CloseAlertCocoaString(NSString*) {}
+void OSXNotificationCenter::OnActivate(NSString*, NSUserNotificationActivationType, unsigned long long) {}
+void OSXNotificationCenter::ShowPendingNotification(OSXNotificationInfo*) {}
+
+NS_IMETHODIMP
+OSXNotificationCenter::ShowAlertNotification(const nsAString&, const nsAString&,
+  const nsAString&, bool, const nsAString&, nsIObserver*, const nsAString&,
+  const nsAString&, const nsAString&, const nsAString&, nsIPrincipal*, bool, bool)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+NS_IMETHODIMP
+OSXNotificationCenter::ShowPersistentNotification(const nsAString&, nsIAlertNotification*, nsIObserver*)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+NS_IMETHODIMP
+OSXNotificationCenter::ShowAlert(nsIAlertNotification*, nsIObserver*)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+NS_IMETHODIMP
+OSXNotificationCenter::ShowAlertWithIconData(nsIAlertNotification*, nsIObserver*, uint32_t, const uint8_t*)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+NS_IMETHODIMP
+OSXNotificationCenter::CloseAlert(const nsAString&, nsIPrincipal*)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+NS_IMETHODIMP
+OSXNotificationCenter::OnImageMissing(nsISupports*)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+NS_IMETHODIMP
+OSXNotificationCenter::OnImageReady(nsISupports*, imgIRequest*)
+{ return NS_ERROR_NOT_IMPLEMENTED; }
+
+} // namespace mozilla
+
+#else /* MAC_OS_X_VERSION >= 10.8 — full implementation */
+
 #import <AppKit/AppKit.h>
 #include "imgIRequest.h"
 #include "imgIContainer.h"
@@ -599,3 +655,5 @@ OSXNotificationCenter::OnImageReady(nsISupports* aUserData,
 }
 
 } // namespace mozilla
+
+#endif /* MAC_OS_X_VERSION >= 10.8 */

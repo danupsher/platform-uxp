@@ -6,8 +6,17 @@
 #include "nsMacUtilsImpl.h"
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <AvailabilityMacros.h>
 #include <sys/types.h>
 #include <sys/sysctl.h>
+
+/* CFBundleCopyExecutableArchitectures and its constants are 10.5+. */
+#if !defined(MAC_OS_X_VERSION_10_5) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+#define kCFBundleExecutableArchitecturePPC   0x00000012
+#define kCFBundleExecutableArchitectureI386  0x00000007
+#define kCFBundleExecutableArchitecturePPC64 0x01000012
+#define kCFBundleExecutableArchitectureX86_64 0x01000007
+#endif
 
 NS_IMPL_ISUPPORTS(nsMacUtilsImpl, nsIMacUtils)
 
@@ -26,6 +35,7 @@ nsMacUtilsImpl::GetArchString(nsAString& aArchString)
        foundPPC64 = false,
        foundX86_64 = false;
 
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   CFBundleRef mainBundle = ::CFBundleGetMainBundle();
   if (!mainBundle) {
     return NS_ERROR_FAILURE;
@@ -59,6 +69,11 @@ nsMacUtilsImpl::GetArchString(nsAString& aArchString)
   }
 
   ::CFRelease(archList);
+#else
+  /* Tiger: CFBundleCopyExecutableArchitectures not available.
+     We're always PPC on Tiger. */
+  foundPPC = true;
+#endif
 
   // The order in the string must always be the same so
   // don't do this in the loop.

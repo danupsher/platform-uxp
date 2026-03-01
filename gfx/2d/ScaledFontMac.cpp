@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "ScaledFontMac.h"
+#include "tiger-cg-compat.h"
 #ifdef USE_SKIA
 #include "PathSkia.h"
 #include "skia/include/core/SkPaint.h"

@@ -34,7 +34,18 @@
 #include "PluginInterposeOSX.h"
 #include <set>
 #import <AppKit/AppKit.h>
+#include <AvailabilityMacros.h>
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
 #import <objc/runtime.h>
+#else
+#import <objc/objc-runtime.h>
+/* method_exchangeImplementations is 10.5+; on Tiger swap the IMP pointers directly */
+static inline void method_exchangeImplementations(Method m1, Method m2) {
+    IMP imp1 = m1->method_imp;
+    m1->method_imp = m2->method_imp;
+    m2->method_imp = imp1;
+}
+#endif
 #import <Carbon/Carbon.h>
 
 using namespace mozilla::plugins;
@@ -124,7 +135,9 @@ NSCursorInfo::NSCursorInfo(NSCursor* aCursor)
       for (NSUInteger i = 0; i < repsCount; ++i) {
         id rep = [reps objectAtIndex:i];
         if ([rep isKindOfClass:[NSBitmapImageRep class]]) {
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
           cgImage = [(NSBitmapImageRep*)rep CGImage];
+#endif
           break;
         }
       }

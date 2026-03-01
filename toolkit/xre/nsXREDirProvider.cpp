@@ -157,9 +157,11 @@ nsXREDirProvider::SetProfile(nsIFile* aDir, nsIFile* aLocalDir)
     // (see bug 801883).
     nsAutoCString cacheDir;
     if (NS_SUCCEEDED(aLocalDir->GetNativePath(cacheDir))) {
+#ifdef UF_HIDDEN
       if (chflags(cacheDir.get(), UF_HIDDEN)) {
         NS_WARNING("Failed to set Cache directory to HIDDEN.");
       }
+#endif
     }
   }
 #endif

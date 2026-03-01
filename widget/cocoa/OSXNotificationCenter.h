@@ -7,6 +7,7 @@
 #define OSXNotificationCenter_h
 
 #import <Foundation/Foundation.h>
+#include <AvailabilityMacros.h>
 #include "nsIAlertsService.h"
 #include "imgINotificationObserver.h"
 #include "nsITimer.h"
@@ -46,8 +47,10 @@ protected:
 
 private:
   mozNotificationCenterDelegate *mDelegate;
+#if defined(MAC_OS_X_VERSION_10_8) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_8)
   nsTArray<RefPtr<OSXNotificationInfo> > mActiveAlerts;
   nsTArray<RefPtr<OSXNotificationInfo> > mPendingAlerts;
+#endif
 };
 
 } // namespace mozilla

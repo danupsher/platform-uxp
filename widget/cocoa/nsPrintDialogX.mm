@@ -90,10 +90,12 @@ nsPrintDialogServiceX::Show(nsPIDOMWindowOuter *aParent, nsIPrintSettings *aSett
     | NSPrintPanelShowsPaperSize
     | NSPrintPanelShowsOrientation
     | NSPrintPanelShowsScaling ];
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   PrintPanelAccessoryController* viewController =
     [[PrintPanelAccessoryController alloc] initWithSettings:aSettings];
   [panel addAccessoryController:viewController];
   [viewController release];
+#endif
 
   // Show the dialog.
   nsCocoaUtils::PrepareForNativeAppModalDialog();
@@ -134,7 +136,9 @@ nsPrintDialogServiceX::Show(nsPIDOMWindowOuter *aParent, nsIPrintSettings *aSett
   }
 
   // Export settings.
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   [viewController exportSettings];
+#endif
 
   // If "ignore scaling" is checked, overwrite scaling factor with 1.
   bool isShrinkToFitChecked;
@@ -658,6 +662,7 @@ static const char sHeaderFooterTags[][4] =  {"", "&T", "&U", "&D", "&P", "&PT"};
 @end
 
 // Accessory controller
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
 
 @implementation PrintPanelAccessoryController
 
@@ -682,3 +687,4 @@ static const char sHeaderFooterTags[][4] =  {"", "&T", "&U", "&D", "&P", "&PT"};
 }
 
 @end
+#endif /* MAC_OS_X_VERSION >= 10.5 */

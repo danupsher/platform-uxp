@@ -95,7 +95,12 @@ quartz_font_ensure_symbols(void)
     CGContextGetAllowsFontSmoothingPtr = dlsym(RTLD_DEFAULT, "CGContextGetAllowsFontSmoothing");
     CGContextSetAllowsFontSmoothingPtr = dlsym(RTLD_DEFAULT, "CGContextSetAllowsFontSmoothing");
 
+    /* CTFontCreateWithGraphicsFont exists in Tiger's CoreText 1.0.4 but
+       crashes inside TFont::TFont on null pointer dereference.  Only use
+       it on 10.5+ where the implementation is solid. */
+#if !defined(MAC_OS_X_VERSION_MIN_REQUIRED) || MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     CTFontCreateWithGraphicsFontPtr = dlsym(RTLD_DEFAULT, "CTFontCreateWithGraphicsFont");
+#endif
 
     if ((CGFontCreateWithFontNamePtr || CGFontCreateWithNamePtr) &&
 	CGFontGetGlyphBBoxesPtr &&
@@ -538,7 +543,15 @@ _cairo_quartz_init_glyph_path (cairo_quartz_scaled_font_t *font,
 					-font->base.scale.yy,
 					0, 0);
 
-    ctFont = CTFontCreateWithGraphicsFont (font_face->cgFont, 1.0, NULL, NULL);
+    /* Use the dlsym pointer — CTFontCreateWithGraphicsFont is buggy on
+       Tiger and the pointer is kept NULL there (see quartz_font_ensure_symbols). */
+    if (CTFontCreateWithGraphicsFontPtr) {
+	ctFont = CTFontCreateWithGraphicsFontPtr (font_face->cgFont, 1.0, NULL, NULL);
+    } else {
+	ctFont = NULL;
+    }
+    if (!ctFont)
+	return CAIRO_INT_STATUS_UNSUPPORTED;
     glyphPath = CTFontCreatePathForGlyph (ctFont, glyph, &textMatrix);
     CFRelease (ctFont);
     if (!glyphPath)

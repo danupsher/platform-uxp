@@ -1422,10 +1422,9 @@ audiounit_set_buffer_size(cubeb_stream * stm, uint32_t new_size_frames, set_buff
       PRINT_ERROR_CODE("AudioUnitSetProperty/output/kAudioDevicePropertyBufferFrameSize", r);
     }
 
-    r = AudioUnitRemovePropertyListenerWithUserData(au,
-                                                    kAudioDevicePropertyBufferFrameSize,
-                                                    buffer_size_changed_callback,
-                                                    stm);
+    r = AudioUnitRemovePropertyListener(au,
+                                        kAudioDevicePropertyBufferFrameSize,
+                                        buffer_size_changed_callback);
     if (r != noErr) {
       if (set_side == INPUT) {
         PRINT_ERROR_CODE("AudioUnitAddPropertyListener/input/kAudioDevicePropertyBufferFrameSize", r);
@@ -1448,10 +1447,9 @@ audiounit_set_buffer_size(cubeb_stream * stm, uint32_t new_size_frames, set_buff
     LOG("(%p) audiounit_set_buffer_size : wait count = %d", stm, count);
   }
 
-  r = AudioUnitRemovePropertyListenerWithUserData(au,
-                                                  kAudioDevicePropertyBufferFrameSize,
-                                                  buffer_size_changed_callback,
-                                                  stm);
+  r = AudioUnitRemovePropertyListener(au,
+                                      kAudioDevicePropertyBufferFrameSize,
+                                      buffer_size_changed_callback);
   if (r != noErr) {
     if (set_side == INPUT) {
       PRINT_ERROR_CODE("AudioUnitAddPropertyListener/input/kAudioDevicePropertyBufferFrameSize", r);

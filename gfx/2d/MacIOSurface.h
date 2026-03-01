@@ -6,6 +6,16 @@
 #ifndef MacIOSurface_h__
 #define MacIOSurface_h__
 #ifdef XP_DARWIN
+// IOSurface requires Mac OS X 10.6+
+#include <AvailabilityMacros.h>
+#if !defined(MAC_OS_X_VERSION_10_6) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6
+// Stub for pre-10.6: minimal MacIOSurface to satisfy RefPtr<MacIOSurface> declarations
+#include "mozilla/RefCounted.h"
+class MacIOSurface final : public mozilla::external::AtomicRefCounted<MacIOSurface> {
+public:
+  MOZ_DECLARE_REFCOUNTED_VIRTUAL_TYPENAME(MacIOSurface)
+};
+#else // 10.6+
 #include <QuartzCore/QuartzCore.h>
 #include <CoreVideo/CoreVideo.h>
 #include <dlfcn.h>
@@ -212,5 +222,6 @@ public:
   } sLibraryUnloader;
 };
 
-#endif
-#endif
+#endif // 10.6+ (else for stub)
+#endif // XP_DARWIN
+#endif // MacIOSurface_h__

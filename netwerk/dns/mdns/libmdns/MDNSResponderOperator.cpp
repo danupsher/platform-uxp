@@ -5,6 +5,26 @@
 
 #include "MDNSResponderOperator.h"
 #include "MDNSResponderReply.h"
+#include <AvailabilityMacros.h>
+
+/* DNSServiceGetAddrInfo is 10.6+.  Provide stubs for Tiger. */
+#if !defined(MAC_OS_X_VERSION_10_6) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6
+#include <dns_sd.h>
+#ifndef kDNSServiceProtocol_IPv4
+#define kDNSServiceProtocol_IPv4 0x01
+#define kDNSServiceProtocol_IPv6 0x02
+typedef void (*DNSServiceGetAddrInfoReply)(DNSServiceRef, DNSServiceFlags, uint32_t,
+    DNSServiceErrorType, const char*, const struct sockaddr*, uint32_t, void*);
+static inline DNSServiceErrorType DNSServiceGetAddrInfo(DNSServiceRef *sdRef,
+    DNSServiceFlags flags, uint32_t interfaceIndex, uint32_t protocol,
+    const char *hostname, DNSServiceGetAddrInfoReply callBack, void *context) {
+  (void)sdRef; (void)flags; (void)interfaceIndex; (void)protocol;
+  (void)hostname; (void)callBack; (void)context;
+  return kDNSServiceErr_Unsupported;
+}
+#endif
+#endif
+
 #include "mozilla/EndianUtils.h"
 #include "mozilla/Logging.h"
 #include "mozilla/ScopeExit.h"

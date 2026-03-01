@@ -16,6 +16,25 @@
 
 #import <Cocoa/Cocoa.h>
 
+// Tiger (10.4) compatibility: NSSpeechSynthesizer property constants
+// were added in 10.5.  NSUInteger/CGFloat/NSSpeechImmediateBoundary
+// are provided by tiger-compat.h (force-included via CFLAGS).
+#include <AvailabilityMacros.h>
+#if !defined(MAC_OS_X_VERSION_10_5) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+#ifndef NSVoiceLocaleIdentifier
+#define NSVoiceLocaleIdentifier @"VoiceLocaleIdentifier"
+#endif
+#ifndef NSSpeechRateProperty
+#define NSSpeechRateProperty @"Rate"
+#endif
+#ifndef NSSpeechVolumeProperty
+#define NSSpeechVolumeProperty @"Volume"
+#endif
+#ifndef NSSpeechPitchBaseProperty
+#define NSSpeechPitchBaseProperty @"PitchBase"
+#endif
+#endif
+
 // We can escape the default delimiters ("[[" and "]]") by temporarily
 // changing the delimiters just before they appear, and changing them back
 // just after.

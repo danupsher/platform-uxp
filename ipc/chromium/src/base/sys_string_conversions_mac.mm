@@ -5,11 +5,25 @@
 #include "base/sys_string_conversions.h"
 
 #import <Foundation/Foundation.h>
+#include <AvailabilityMacros.h>
 
 #include <vector>
 
 #include "base/scoped_cftyperef.h"
 #include "base/string_piece.h"
+
+/* Tiger (10.4) doesn't have CFStringCreateWithBytesNoCopy.
+   Fall back to the copying variant. */
+#if !defined(MAC_OS_X_VERSION_10_5) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+static inline CFStringRef CFStringCreateWithBytesNoCopy(
+    CFAllocatorRef alloc, const UInt8 *bytes, CFIndex numBytes,
+    CFStringEncoding encoding, Boolean isExternalRepresentation,
+    CFAllocatorRef contentsDeallocator) {
+  (void)contentsDeallocator;
+  return CFStringCreateWithBytes(alloc, bytes, numBytes, encoding,
+                                 isExternalRepresentation);
+}
+#endif
 
 namespace base {
 

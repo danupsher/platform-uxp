@@ -425,6 +425,11 @@ ResidentFastDistinguishedAmount(int64_t* aN)
 #include <mach/mach_vm.h>
 #include <mach/shared_region.h>
 #include <mach/task.h>
+
+/* CPU_TYPE_ARM not defined on Tiger SDK */
+#ifndef CPU_TYPE_ARM
+#define CPU_TYPE_ARM ((cpu_type_t) 12)
+#endif
 #include <sys/sysctl.h>
 
 [[nodiscard]] static bool

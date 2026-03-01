@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include <dlfcn.h>
+#include "tiger-cg-compat.h"
 #include "BorrowedContext.h"
 #include "DataSurfaceHelpers.h"
 #include "DrawTargetCG.h"
@@ -29,7 +30,9 @@ using namespace std;
 //CG_EXTERN void CGContextSetCompositeOperation (CGContextRef, PrivateCGCompositeMode);
 
 // A private API that Cairo has been using for a long time
+extern "C" {
 CG_EXTERN void CGContextSetCTM(CGContextRef, CGAffineTransform);
+}
 
 namespace mozilla {
 namespace gfx {
@@ -151,6 +154,7 @@ DrawTargetCG::DrawTargetCG()
   : mColorSpace(nullptr)
   , mCg(nullptr)
   , mMayContainInvalidPremultipliedData(false)
+  , mIsBitmapContext(false)
 {
 }
 
@@ -207,6 +211,11 @@ DrawTargetCG::Snapshot()
     }
 #endif
     Flush();
+    if (!mIsBitmapContext) {
+      // Non-bitmap contexts (e.g. window CGContext on Tiger) can't use
+      // SourceSurfaceCGBitmapContext which calls CGBitmapContext* APIs.
+      return nullptr;
+    }
     mSnapshot = new SourceSurfaceCGBitmapContext(this);
   }
 
@@ -1530,6 +1539,7 @@ DrawTargetCG::FillGlyphs(ScaledFont *aFont, const GlyphBuffer &aBuffer, const Pa
     CGContextSetTextDrawingMode(cg, kCGTextClip);
     CGRect extents;
     if (ScaledFontMac::CTFontDrawGlyphsPtr != nullptr) {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
       CGRect *bboxes = new CGRect[aBuffer.mNumGlyphs];
       CTFontGetBoundingRectsForGlyphs(macFont->mCTFont, kCTFontDefaultOrientation,
                                       glyphs.begin(), bboxes, aBuffer.mNumGlyphs);
@@ -1537,16 +1547,36 @@ DrawTargetCG::FillGlyphs(ScaledFont *aFont, const GlyphBuffer &aBuffer, const Pa
       ScaledFontMac::CTFontDrawGlyphsPtr(macFont->mCTFont, glyphs.begin(),
                                          positions.begin(), aBuffer.mNumGlyphs, cg);
       delete[] bboxes;
+#endif
     } else {
-      CGRect *bboxes = new CGRect[aBuffer.mNumGlyphs];
-      CGFontGetGlyphBBoxes(macFont->mFont, glyphs.begin(), aBuffer.mNumGlyphs, bboxes);
-      extents = ComputeGlyphsExtents(bboxes, positions.begin(), aBuffer.mNumGlyphs, macFont->mSize);
-
+      // Tiger fallback: use CGFont APIs with CGContextShowGlyphsWithAdvances
       CGContextSetFont(cg, macFont->mFont);
       CGContextSetFontSize(cg, macFont->mSize);
-      CGContextShowGlyphsAtPositions(cg, glyphs.begin(), positions.begin(),
-                                     aBuffer.mNumGlyphs);
-      delete[] bboxes;
+      // Convert absolute positions to relative advances for Tiger
+      mozilla::Vector<CGSize, 32> advances;
+      if (advances.resizeUninitialized(aBuffer.mNumGlyphs)) {
+        for (unsigned int i = 0; i < aBuffer.mNumGlyphs - 1; i++) {
+          advances[i].width = positions[i + 1].x - positions[i].x;
+          advances[i].height = positions[i + 1].y - positions[i].y;
+        }
+        advances[aBuffer.mNumGlyphs - 1].width = 0;
+        advances[aBuffer.mNumGlyphs - 1].height = 0;
+        CGContextSetTextPosition(cg, positions[0].x, positions[0].y);
+        CGContextShowGlyphsWithAdvances(cg, glyphs.begin(), advances.begin(),
+                                        aBuffer.mNumGlyphs);
+      }
+      // Approximate glyph extents from positions and font size
+      CGFloat minX = positions[0].x, maxX = positions[0].x;
+      CGFloat minY = positions[0].y, maxY = positions[0].y;
+      for (unsigned int i = 1; i < aBuffer.mNumGlyphs; i++) {
+        if (positions[i].x < minX) minX = positions[i].x;
+        if (positions[i].x > maxX) maxX = positions[i].x;
+        if (positions[i].y < minY) minY = positions[i].y;
+        if (positions[i].y > maxY) maxY = positions[i].y;
+      }
+      extents = CGRectMake(minX, minY - macFont->mSize,
+                           maxX - minX + macFont->mSize,
+                           maxY - minY + macFont->mSize * 2);
     }
     CGContextScaleCTM(cg, 1, -1);
     DrawGradient(mColorSpace, cg, aPattern, extents);
@@ -1556,14 +1586,27 @@ DrawTargetCG::FillGlyphs(ScaledFont *aFont, const GlyphBuffer &aBuffer, const Pa
     CGContextSetTextDrawingMode(cg, kCGTextFill);
     SetFillFromPattern(cg, mColorSpace, aPattern);
     if (ScaledFontMac::CTFontDrawGlyphsPtr != nullptr) {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
       ScaledFontMac::CTFontDrawGlyphsPtr(macFont->mCTFont, glyphs.begin(),
                                          positions.begin(),
                                          aBuffer.mNumGlyphs, cg);
+#endif
     } else {
       CGContextSetFont(cg, macFont->mFont);
       CGContextSetFontSize(cg, macFont->mSize);
-      CGContextShowGlyphsAtPositions(cg, glyphs.begin(), positions.begin(),
-                                     aBuffer.mNumGlyphs);
+      // Convert positions to advances for Tiger (CGContextShowGlyphsWithAdvances is 10.3+)
+      mozilla::Vector<CGSize, 32> advances;
+      if (advances.resizeUninitialized(aBuffer.mNumGlyphs)) {
+        for (unsigned int i = 0; i < aBuffer.mNumGlyphs - 1; i++) {
+          advances[i].width = positions[i + 1].x - positions[i].x;
+          advances[i].height = positions[i + 1].y - positions[i].y;
+        }
+        advances[aBuffer.mNumGlyphs - 1].width = 0;
+        advances[aBuffer.mNumGlyphs - 1].height = 0;
+        CGContextSetTextPosition(cg, positions[0].x, positions[0].y);
+        CGContextShowGlyphsWithAdvances(cg, glyphs.begin(), advances.begin(),
+                                        aBuffer.mNumGlyphs);
+      }
     }
   }
 
@@ -1693,7 +1736,7 @@ DrawTargetCG::Init(BackendType aType,
 
   mSize = aSize;
 
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
   if (aType == BackendType::COREGRAPHICS_ACCELERATED) {
     RefPtr<MacIOSurface> ioSurface = MacIOSurface::CreateIOSurface(aSize.width, aSize.height);
     mCg = ioSurface->CreateIOSurfaceContext();
@@ -1761,17 +1804,24 @@ DrawTargetCG::Init(BackendType aType,
     ClearRect(Rect(0, 0, mSize.width, mSize.height));
   }
 
+  mIsBitmapContext = (aType == BackendType::COREGRAPHICS);
+
   return true;
 }
 
 void
 DrawTargetCG::Flush()
 {
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
   if (GetContextType(mCg) == CG_CONTEXT_TYPE_IOSURFACE) {
     CGContextFlush(mCg);
   } else if (GetContextType(mCg) == CG_CONTEXT_TYPE_BITMAP &&
              mMayContainInvalidPremultipliedData) {
+#else
+  // On Tiger, use cached flag instead of probing with CGBitmapContextGetWidth
+  // every frame (which logs "invalid context" warnings for non-bitmap contexts).
+  if (mIsBitmapContext && mMayContainInvalidPremultipliedData) {
+#endif
     // We can't guarantee that all our users can handle pixel data where an RGB
     // component value exceeds the pixel's alpha value. In particular, the
     // color conversion that CG does when we draw a CGImage snapshot of this
@@ -1783,9 +1833,6 @@ DrawTargetCG::Flush()
     EnsureValidPremultipliedData(mCg);
     mMayContainInvalidPremultipliedData = false;
   }
-#else
-  //TODO
-#endif
 }
 
 bool
@@ -1825,20 +1872,23 @@ DrawTargetCG::Init(CGContextRef cgContext, const IntSize &aSize)
   mOriginalTransform = CGContextGetCTM(mCg);
 
   mFormat = SurfaceFormat::B8G8R8A8;
-#ifdef MOZ_WIDGET_COCOA
+#if defined(MOZ_WIDGET_COCOA) && defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
   if (GetContextType(mCg) == CG_CONTEXT_TYPE_BITMAP) {
+#else
+  // On Tiger (pre-10.6), we don't have GetContextType. Probe once at init time
+  // and cache the result to avoid per-frame CGBitmapContextGetWidth spam.
+  mIsBitmapContext = (CGBitmapContextGetWidth(mCg) > 0);
+  if (mIsBitmapContext) {
 #endif
     CGColorSpaceRef colorspace;
     CGBitmapInfo bitinfo = CGBitmapContextGetBitmapInfo(mCg);
     colorspace = CGBitmapContextGetColorSpace (mCg);
-    if (CGColorSpaceGetNumberOfComponents(colorspace) == 1) {
+    if (colorspace && CGColorSpaceGetNumberOfComponents(colorspace) == 1) {
       mFormat = SurfaceFormat::A8;
     } else if ((bitinfo & kCGBitmapAlphaInfoMask) == kCGImageAlphaNoneSkipFirst) {
       mFormat = SurfaceFormat::B8G8R8X8;
     }
-#ifdef MOZ_WIDGET_COCOA
   }
-#endif
 
   return true;
 }
@@ -1951,6 +2001,33 @@ DrawTargetCG::PushClip(const Path *aPath)
 void
 DrawTargetCG::PopClip()
 {
+  CGContextRestoreGState(mCg);
+}
+
+void
+DrawTargetCG::PushLayer(bool aOpaque, Float aOpacity,
+                        SourceSurface* aMask,
+                        const Matrix& aMaskTransform,
+                        const IntRect& aBounds,
+                        bool aCopyBackground)
+{
+  CGContextSaveGState(mCg);
+
+  if (aOpacity < 1.0f) {
+    CGContextSetAlpha(mCg, aOpacity);
+  }
+
+  // CG's transparency layer handles offscreen compositing natively.
+  // Unlike the manual Snapshot()+PushNewDT path, CG composites the
+  // layer back over the existing content, so aCopyBackground is
+  // handled implicitly.
+  CGContextBeginTransparencyLayer(mCg, nullptr);
+}
+
+void
+DrawTargetCG::PopLayer()
+{
+  CGContextEndTransparencyLayer(mCg);
   CGContextRestoreGState(mCg);
 }
 

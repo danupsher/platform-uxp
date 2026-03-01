@@ -7,6 +7,7 @@
 #define dom_plugins_PluginUtilsOSX_h 1
 
 #include "npapi.h"
+#include <AvailabilityMacros.h>
 #include "mozilla/gfx/QuartzSupport.h"
 #include "nsRect.h"
 
@@ -30,6 +31,7 @@ void Repaint(void* cgLayer, nsIntRect aRect);
 
 bool SetProcessName(const char* aProcessName);
 
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 /*
  * Provides a wrapper around nsCARenderer to manage double buffering
  * without having to unbind nsCARenderer on every surface swaps.
@@ -41,20 +43,10 @@ bool SetProcessName(const char* aProcessName);
 class nsDoubleBufferCARenderer {
 public:
   nsDoubleBufferCARenderer() : mCALayer(nullptr), mContentsScaleFactor(1.0) {}
-  // Returns width in "display pixels".  A "display pixel" is the smallest
-  // fully addressable part of a display.  But in HiDPI modes each "display
-  // pixel" corresponds to more than one device pixel.  Multiply display pixels
-  // by mContentsScaleFactor to get device pixels.
   size_t GetFrontSurfaceWidth();
-  // Returns height in "display pixels".  Multiply by
-  // mContentsScaleFactor to get device pixels.
   size_t GetFrontSurfaceHeight();
   double GetFrontSurfaceContentsScaleFactor();
-  // Returns width in "display pixels".  Multiply by
-  // mContentsScaleFactor to get device pixels.
   size_t GetBackSurfaceWidth();
-  // Returns height in "display pixels".  Multiply by
-  // mContentsScaleFactor to get device pixels.
   size_t GetBackSurfaceHeight();
   double GetBackSurfaceContentsScaleFactor();
   IOSurfaceID GetFrontSurfaceID();
@@ -64,8 +56,6 @@ public:
   bool HasCALayer();
 
   void SetCALayer(void *aCALayer);
-  // aWidth and aHeight are in "display pixels".  Multiply by
-  // aContentsScaleFactor to get device pixels.
   bool InitFrontSurface(size_t aWidth, size_t aHeight,
                         double aContentsScaleFactor,
                         AllowOfflineRendererEnum aAllowOfflineRenderer);
@@ -83,6 +73,7 @@ private:
   RefPtr<MacIOSurface> mBackSurface;
   double mContentsScaleFactor;
 };
+#endif /* MAC_OS_X_VERSION >= 10.6 */
 
 } // namespace PluginUtilsOSX
 } // namespace plugins

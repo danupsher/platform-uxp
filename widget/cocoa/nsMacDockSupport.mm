@@ -67,13 +67,15 @@ nsMacDockSupport::SetBadgeText(const nsAString& aBadgeText)
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK_NSRESULT;
 
-  NSDockTile *tile = [[NSApplication sharedApplication] dockTile];
   mBadgeText = aBadgeText;
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
+  NSDockTile *tile = [[NSApplication sharedApplication] dockTile];
   if (aBadgeText.IsEmpty())
     [tile setBadgeLabel: nil];
   else
     [tile setBadgeLabel:[NSString stringWithCharacters:reinterpret_cast<const unichar*>(mBadgeText.get())
                                                 length:mBadgeText.Length()]];
+#endif
   return NS_OK;
 
   NS_OBJC_END_TRY_ABORT_BLOCK_NSRESULT;

@@ -318,7 +318,14 @@ nsresult nsToolkit::SwizzleMethods(Class aClass, SEL orgMethod, SEL posedMethod,
   if (!original || !posed)
     return NS_ERROR_FAILURE;
 
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   method_exchangeImplementations(original, posed);
+#else
+  /* Tiger ObjC 1.0 runtime: swap IMPs directly via struct fields. */
+  IMP imp1 = original->method_imp;
+  original->method_imp = posed->method_imp;
+  posed->method_imp = imp1;
+#endif
 
   return NS_OK;
 

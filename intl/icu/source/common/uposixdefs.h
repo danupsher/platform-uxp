@@ -69,8 +69,11 @@
 #endif
 
 #if !defined _POSIX_C_SOURCE && \
-    defined(__APPLE__) && defined(__MACH__) && !defined(__clang__)
+    defined(__APPLE__) && defined(__MACH__) && !defined(__clang__) && \
+    !defined(_DARWIN_C_SOURCE)
 // Needed to prevent EOWNERDEAD issues with GCC on Mac
+// Skip when _DARWIN_C_SOURCE is defined (superset) — on Tiger,
+// _POSIX_C_SOURCE hides BSD extensions like localtime_r.
 #define _POSIX_C_SOURCE 200809L
 #endif
 

@@ -1403,7 +1403,23 @@ ContainerLayer::DefaultComputeEffectiveTransforms(const Matrix4x4& aTransformToS
         /* In 2D case, only translation and/or positive scaling can be done w/o using IntermediateSurface.
          * Otherwise, when rotation or flip happen, we should check whether to use IntermediateSurface.
          */
-        if (contTransform.HasNonAxisAlignedTransform() || contTransform.HasNegativeScaling()) {
+        if (contTransform.HasNegativeScaling()) {
+          // Tiger fix: force intermediate surface for containers with negative
+          // scaling (e.g. from CSS animations producing 180deg rotations).
+          // Without this, children inherit the negative scale in their effective
+          // transforms and render flipped inside intermediate FBOs.
+          useIntermediateSurface = true;
+          {
+            static int negScaleLog = 0;
+            if (negScaleLog < 100) {
+              negScaleLog++;
+              fprintf(stderr, "TIGER_FLIP_XFORM: HasNegativeScaling '%s' "
+                      "_11=%.3f _22=%.3f _12=%.3f _21=%.3f forcing intermediate\n",
+                      Name(), contTransform._11, contTransform._22,
+                      contTransform._12, contTransform._21);
+            }
+          }
+        } else if (contTransform.HasNonAxisAlignedTransform()) {
           checkMaskLayers = true;
         }
       }

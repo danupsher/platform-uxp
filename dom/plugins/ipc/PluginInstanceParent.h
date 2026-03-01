@@ -15,7 +15,11 @@
 #include <d3d10_1.h>
 #include "nsRefPtrHashtable.h"
 #elif defined(MOZ_WIDGET_COCOA)
+// QuartzSupport.h pulls in MacIOSurface.h which requires IOSurface (10.6+)
+// and QuartzCore umbrella headers that include ObjC Foundation in C++ context
+#if defined(MAC_OS_X_VERSION_10_6) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6
 #include "mozilla/gfx/QuartzSupport.h"
+#endif
 #endif
 
 #include "npfunctions.h"
@@ -439,12 +443,14 @@ private:
 #endif // defined(XP_WIN)
 #if defined(MOZ_WIDGET_COCOA)
 private:
-    Shmem                  mShSurface; 
+    Shmem                  mShSurface;
     uint16_t               mShWidth;
     uint16_t               mShHeight;
     CGColorSpaceRef        mShColorSpace;
+#if defined(MAC_OS_X_VERSION_10_6) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6
     RefPtr<MacIOSurface> mIOSurface;
     RefPtr<MacIOSurface> mFrontIOSurface;
+#endif
 #endif // definied(MOZ_WIDGET_COCOA)
 
     // ObjectFrame layer wrapper

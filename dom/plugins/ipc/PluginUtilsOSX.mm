@@ -5,7 +5,10 @@
 
 #include <dlfcn.h>
 #import <AppKit/AppKit.h>
+#include <AvailabilityMacros.h>
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
 #import <QuartzCore/QuartzCore.h>
+#endif
 #include "PluginUtilsOSX.h"
 
 // Remove definitions for try/catch interfering with ObjCException macros.
@@ -16,12 +19,13 @@
 
 #include "mozilla/Sprintf.h"
 
+using namespace mozilla::plugins::PluginUtilsOSX;
+
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
 @interface CALayer (ContentsScale)
 - (double)contentsScale;
 - (void)setContentsScale:(double)scale;
 @end
-
-using namespace mozilla::plugins::PluginUtilsOSX;
 
 @interface CGBridgeLayer : CALayer {
   DrawPluginFunc mDrawFunc;
@@ -133,6 +137,7 @@ void mozilla::plugins::PluginUtilsOSX::Repaint(void *caLayer, nsIntRect aRect) {
 #endif
   [CATransaction commit];
 }
+#endif /* MAC_OS_X_VERSION >= 10.5 (CALayer) */
 
 @interface EventProcessor : NSObject {
   RemoteProcessEvents   aRemoteEvents;
@@ -329,6 +334,7 @@ namespace mozilla {
 namespace plugins {
 namespace PluginUtilsOSX {
 
+#if defined(MAC_OS_X_VERSION_10_6) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_6)
 size_t nsDoubleBufferCARenderer::GetFrontSurfaceWidth() {
   if (!HasFrontSurface()) {
     return 0;
@@ -474,6 +480,7 @@ void nsDoubleBufferCARenderer::ClearBackSurface() {
     mCARenderer = nullptr;
   }
 }
+#endif /* MAC_OS_X_VERSION >= 10.6 (nsDoubleBufferCARenderer) */
 
 } // namespace PluginUtilsOSX
 } // namespace plugins

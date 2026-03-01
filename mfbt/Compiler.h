@@ -25,8 +25,8 @@
 #  define MOZ_GCC_VERSION_AT_MOST(major, minor, patchlevel)           \
      ((__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__) \
       <= ((major) * 10000 + (minor) * 100 + (patchlevel)))
-#  if !MOZ_GCC_VERSION_AT_LEAST(9, 1, 0)
-#    error "mfbt (and Goanna) require at least gcc 9.1 to build."
+#  if !MOZ_GCC_VERSION_AT_LEAST(4, 9, 0)
+#    error "mfbt (and Goanna) require at least gcc 4.9 to build."
 #  endif
 
 #elif defined(_MSC_VER)

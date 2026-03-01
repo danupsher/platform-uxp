@@ -939,16 +939,53 @@ RenderWithCoreUI(CGRect aRect, CGContextRef cgContext, NSDictionary* aOptions, b
   }
 
   if (appearance && [appearance respondsToSelector:@selector(_drawInRect:context:options:)]) {
-    // Render through NSAppearance on Mac OS 10.10 and up. This will call
-    // CUIDraw with a CoreUI renderer that will give us the correct 10.10
-    // style. Calling CUIDraw directly with [NSWindow coreUIRenderer] still
-    // renders 10.9-style widgets on 10.10.
+    // Render through NSAppearance on Mac OS 10.10 and up.
     [appearance _drawInRect:aRect context:cgContext options:aOptions];
-  } else {
-    // 10.9 and below
-    CUIRendererRef renderer = [NSWindow respondsToSelector:@selector(coreUIRenderer)]
-      ? [NSWindow coreUIRenderer] : nil;
+  } else if (nsCocoaFeatures::OnLionOrLater() &&
+             [NSWindow respondsToSelector:@selector(coreUIRenderer)]) {
+    // 10.6-10.9: CoreUI available (skip on Tiger — no CoreUI)
+    CUIRendererRef renderer = [NSWindow coreUIRenderer];
     CUIDraw(renderer, aRect, cgContext, (CFDictionaryRef)aOptions, NULL);
+  } else {
+    // Tiger/Leopard: no CoreUI. Draw a basic Aqua-style fallback.
+    NSString *widget = [aOptions objectForKey:@"widget"];
+    NSString *state = [aOptions objectForKey:@"state"];
+    BOOL isActive = !state || ![state isEqualToString:@"inactive"];
+
+    CGContextSaveGState(cgContext);
+    CGContextClipToRect(cgContext, aRect);
+
+    if (widget && [widget isEqualToString:@"kCUIWidgetWindowFrame"]) {
+      // Toolbar/titlebar: draw Aqua-style gradient with manual strips
+      // (CGGradient is 10.5+, so we approximate with filled strips)
+      CGFloat topGrey = isActive ? 0.86 : 0.94;
+      CGFloat botGrey = isActive ? 0.72 : 0.87;
+      int steps = (int)aRect.size.height;
+      if (steps < 1) steps = 1;
+      CGFloat stripH = aRect.size.height / steps;
+      for (int i = 0; i < steps; i++) {
+        CGFloat t = (CGFloat)i / (steps > 1 ? steps - 1 : 1);
+        CGFloat grey = topGrey + t * (botGrey - topGrey);
+        CGContextSetRGBFillColor(cgContext, grey, grey, grey, 1.0);
+        CGRect strip = CGRectMake(aRect.origin.x,
+                                  CGRectGetMaxY(aRect) - (i + 1) * stripH,
+                                  aRect.size.width, stripH + 0.5);
+        CGContextFillRect(cgContext, strip);
+      }
+
+      // Bottom separator line
+      CGContextSetRGBStrokeColor(cgContext, 0.45, 0.45, 0.45, 1.0);
+      CGContextSetLineWidth(cgContext, 1.0);
+      CGContextMoveToPoint(cgContext, aRect.origin.x, aRect.origin.y + 0.5);
+      CGContextAddLineToPoint(cgContext, aRect.origin.x + aRect.size.width, aRect.origin.y + 0.5);
+      CGContextStrokePath(cgContext);
+    } else {
+      // Other widgets: fill with a neutral Aqua grey
+      CGContextSetRGBFillColor(cgContext, 0.90, 0.90, 0.90, 1.0);
+      CGContextFillRect(cgContext, aRect);
+    }
+
+    CGContextRestoreGState(cgContext);
   }
 }
 
@@ -2209,6 +2246,11 @@ nsNativeThemeCocoa::GetParentScrollbarFrame(nsIFrame *aFrame)
 static bool
 ToolbarCanBeUnified(CGContextRef cgContext, const HIRect& inBoxRect, NSWindow* aWindow)
 {
+#if !defined(MAC_OS_X_VERSION_10_5) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+  // Tiger: unified toolbar uses CUIDraw (CoreUI) which doesn't exist.
+  // Fall through to hardcoded grey fill path instead.
+  return false;
+#else
   if (![aWindow isKindOfClass:[ToolbarWindow class]])
     return false;
 
@@ -2217,6 +2259,7 @@ ToolbarCanBeUnified(CGContextRef cgContext, const HIRect& inBoxRect, NSWindow* a
   return inBoxRect.origin.x == 0 &&
          inBoxRect.size.width >= [win frame].size.width &&
          CGRectGetMaxY(inBoxRect) <= unifiedToolbarHeight;
+#endif
 }
 
 // By default, kCUIWidgetWindowFrame drawing draws rounded corners in the
@@ -3807,6 +3850,28 @@ bool
 nsNativeThemeCocoa::ThemeSupportsWidget(nsPresContext* aPresContext, nsIFrame* aFrame,
                                       uint8_t aWidgetType)
 {
+  // Tiger (10.4): native theme drawing produces black output because CoreUI
+  // and modern Cocoa drawing APIs are unavailable. Disable native theming for
+  // all non-scrollbar widgets so the browser falls back to CSS backgrounds.
+  // Note: nsCocoaFeatures clamps version to 10.5 minimum, so we use a
+  // compile-time SDK check instead.
+#if !defined(MAC_OS_X_VERSION_10_5) || MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5
+  if (aWidgetType == NS_THEME_SCROLLBAR ||
+      aWidgetType == NS_THEME_SCROLLBAR_SMALL ||
+      aWidgetType == NS_THEME_SCROLLBARBUTTON_UP ||
+      aWidgetType == NS_THEME_SCROLLBARBUTTON_DOWN ||
+      aWidgetType == NS_THEME_SCROLLBARBUTTON_LEFT ||
+      aWidgetType == NS_THEME_SCROLLBARBUTTON_RIGHT ||
+      aWidgetType == NS_THEME_SCROLLBARTHUMB_HORIZONTAL ||
+      aWidgetType == NS_THEME_SCROLLBARTHUMB_VERTICAL ||
+      aWidgetType == NS_THEME_SCROLLBARTRACK_VERTICAL ||
+      aWidgetType == NS_THEME_SCROLLBARTRACK_HORIZONTAL ||
+      aWidgetType == NS_THEME_SCROLLBAR_NON_DISAPPEARING) {
+    return !IsWidgetStyled(aPresContext, aFrame, aWidgetType);
+  }
+  return false;
+#endif
+
   // We don't have CSS set up to render non-native scrollbars on Mac OS X so we
   // render natively even if native theme support is disabled.
   if (aWidgetType != NS_THEME_SCROLLBAR &&

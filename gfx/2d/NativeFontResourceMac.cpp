@@ -4,6 +4,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "NativeFontResourceMac.h"
+#include "tiger-cg-compat.h"
 #include "Types.h"
 
 #include "mozilla/RefPtr.h"

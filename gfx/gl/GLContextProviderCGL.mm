@@ -120,7 +120,7 @@ GLContextCGL::MakeCurrentImpl(bool aForce)
         // If swapInt is 1, then glSwapBuffers will block and wait for a vblank signal.
         // When we're iterating as fast as possible, however, we want a non-blocking
         // glSwapBuffers, which will happen when swapInt==0.
-        GLint swapInt = gfxPrefs::LayoutFrameRate() == 0 ? 0 : 1;
+        long swapInt = gfxPrefs::LayoutFrameRate() == 0 ? 0 : 1;
         [mContext setValues:&swapInt forParameter:NSOpenGLCPSwapInterval];
     }
     return true;
@@ -172,41 +172,51 @@ GLContextProviderCGL::CreateWrappingExisting(void*, void*)
 }
 
 static const NSOpenGLPixelFormatAttribute kAttribs_singleBuffered[] = {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     NSOpenGLPFAAllowOfflineRenderers,
-    0
+#endif
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_singleBuffered_accel[] = {
     NSOpenGLPFAAccelerated,
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     NSOpenGLPFAAllowOfflineRenderers,
-    0
+#endif
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_doubleBuffered[] = {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     NSOpenGLPFAAllowOfflineRenderers,
+#endif
     NSOpenGLPFADoubleBuffer,
-    0
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_doubleBuffered_accel[] = {
     NSOpenGLPFAAccelerated,
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     NSOpenGLPFAAllowOfflineRenderers,
+#endif
     NSOpenGLPFADoubleBuffer,
-    0
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_offscreen[] = {
-    0
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_offscreen_allow_offline[] = {
+#if defined(MAC_OS_X_VERSION_10_5) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
     NSOpenGLPFAAllowOfflineRenderers,
-    0
+#endif
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_offscreen_accel[] = {
     NSOpenGLPFAAccelerated,
-    0
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static const NSOpenGLPixelFormatAttribute kAttribs_offscreen_coreProfile[] = {
@@ -214,14 +224,14 @@ static const NSOpenGLPixelFormatAttribute kAttribs_offscreen_coreProfile[] = {
 #if defined(MAC_OS_X_VERSION_10_7) && (MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_7)
     NSOpenGLPFAOpenGLProfile, NSOpenGLProfileVersion3_2Core,
 #endif
-    0
+    (NSOpenGLPixelFormatAttribute)0
 };
 
 static NSOpenGLContext*
 CreateWithFormat(const NSOpenGLPixelFormatAttribute* attribs)
 {
     NSOpenGLPixelFormat* format = [[NSOpenGLPixelFormat alloc]
-                                   initWithAttributes:attribs];
+                                   initWithAttributes:(NSOpenGLPixelFormatAttribute*)attribs];
     if (!format) {
         NS_WARNING("Failed to create NSOpenGLPixelFormat.");
         return nullptr;
@@ -289,10 +299,9 @@ GLContextProviderCGL::CreateForWindow(nsIWidget* aWidget, bool aForceAccelerated
 
     if (forceSoftware) {
         NSOpenGLPixelFormatAttribute attribs[] = {
-            NSOpenGLPFARendererID, 0x00020200, // kCGLRendererGenericFloatID
-            NSOpenGLPFAAllowOfflineRenderers,
+            NSOpenGLPFARendererID, (NSOpenGLPixelFormatAttribute)0x00020200, // kCGLRendererGenericFloatID
             NSOpenGLPFADoubleBuffer,
-            0
+            (NSOpenGLPixelFormatAttribute)0
         };
         NSOpenGLPixelFormat* pixelFormat = [[NSOpenGLPixelFormat alloc] initWithAttributes:attribs];
         context = [[NSOpenGLContext alloc] initWithFormat:pixelFormat shareContext:nil];
@@ -313,10 +322,6 @@ GLContextProviderCGL::CreateForWindow(nsIWidget* aWidget, bool aForceAccelerated
     if (!context) {
         return nullptr;
     }
-
-    // make the context transparent
-    GLint opaque = 0;
-    [context setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
 
     SurfaceCaps caps = SurfaceCaps::ForRGBA();
     ContextProfile profile = ContextProfile::OpenGLCompatibility;

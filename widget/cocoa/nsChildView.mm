@@ -1887,9 +1887,13 @@ NSView<mozView>* nsChildView::GetEditorView()
 void
 nsChildView::CreateCompositor()
 {
+  fprintf(stderr, "TIGER_COMP: nsChildView::CreateCompositor() called\n");
   nsBaseWidget::CreateCompositor();
   if (mCompositorBridgeChild) {
+    fprintf(stderr, "TIGER_COMP: mCompositorBridgeChild exists, setting OMTC=true\n");
     [(ChildView *)mView setUsingOMTCompositor:true];
+  } else {
+    fprintf(stderr, "TIGER_COMP: mCompositorBridgeChild is NULL, OMTC=false\n");
   }
 }
 
@@ -2152,7 +2156,31 @@ DrawTitlebarHighlight(NSSize aWindowSize, CGFloat aRadius, CGFloat aDevicePixelW
   [path appendBezierPathWithRect:pathRect];
   pathRect = NSInsetRect(pathRect, aDevicePixelWidth, aDevicePixelWidth);
   CGFloat innerRadius = aRadius - aDevicePixelWidth;
-  [path appendBezierPathWithRoundedRect:pathRect xRadius:innerRadius yRadius:innerRadius];
+  if ([path respondsToSelector:@selector(appendBezierPathWithRoundedRect:xRadius:yRadius:)]) {
+    [path appendBezierPathWithRoundedRect:pathRect xRadius:innerRadius yRadius:innerRadius];
+  } else {
+    // Tiger fallback: construct rounded rect manually with arcs
+    CGFloat minX = NSMinX(pathRect), maxX = NSMaxX(pathRect);
+    CGFloat minY = NSMinY(pathRect), maxY = NSMaxY(pathRect);
+    [path moveToPoint:NSMakePoint(minX + innerRadius, minY)];
+    [path lineToPoint:NSMakePoint(maxX - innerRadius, minY)];
+    [path appendBezierPathWithArcFromPoint:NSMakePoint(maxX, minY)
+                                   toPoint:NSMakePoint(maxX, minY + innerRadius)
+                                    radius:innerRadius];
+    [path lineToPoint:NSMakePoint(maxX, maxY - innerRadius)];
+    [path appendBezierPathWithArcFromPoint:NSMakePoint(maxX, maxY)
+                                   toPoint:NSMakePoint(maxX - innerRadius, maxY)
+                                    radius:innerRadius];
+    [path lineToPoint:NSMakePoint(minX + innerRadius, maxY)];
+    [path appendBezierPathWithArcFromPoint:NSMakePoint(minX, maxY)
+                                   toPoint:NSMakePoint(minX, maxY - innerRadius)
+                                    radius:innerRadius];
+    [path lineToPoint:NSMakePoint(minX, minY + innerRadius)];
+    [path appendBezierPathWithArcFromPoint:NSMakePoint(minX, minY)
+                                   toPoint:NSMakePoint(minX + innerRadius, minY)
+                                    radius:innerRadius];
+    [path closePath];
+  }
   [path addClip];
 
   // Now we fill the path with a subtle highlight gradient.
@@ -3433,11 +3461,40 @@ NSEvent* gLastDragMouseDownEvent = nil;
 {
   NS_OBJC_BEGIN_TRY_ABORT_BLOCK;
 
-  [mGLContext clearDrawable];
-  CGLLockContext((CGLContextObj)[mGLContext CGLContextObj]);
-  [mGLContext setView:self];
-  [mGLContext update];
-  CGLUnlockContext((CGLContextObj)[mGLContext CGLContextObj]);
+  fprintf(stderr, "TIGER_GL: forceRefreshOpenGL called, mGLContext=%p\n", mGLContext);
+  fflush(stderr);
+  if (mGLContext) {
+    [mGLContext clearDrawable];
+    CGLLockContext((CGLContextObj)[mGLContext CGLContextObj]);
+    // Use mPixelHostingView (the actual drawing surface), not self.
+    // This must match what doDrawRect expects to avoid setView conflicts.
+    [mGLContext setView:mPixelHostingView];
+    [mGLContext update];
+    CGLUnlockContext((CGLContextObj)[mGLContext CGLContextObj]);
+    // Mark as done so doDrawRect doesn't try to setView again.
+    mNeedsGLUpdate = NO;
+    fprintf(stderr, "TIGER_GL: forceRefreshOpenGL completed setView to mPixelHostingView\n");
+    fflush(stderr);
+
+    // TIGER FIX: The initial composites from doDrawRect likely happened before
+    // the GL context had a view set, so the chrome layer textures were rendered
+    // to an invisible offscreen buffer. Now that the view is attached, trigger
+    // a new doDrawRect → PaintWindow cycle so the compositor re-composites
+    // all layers to the actual window surface.
+    fprintf(stderr, "TIGER_GL: forceRefreshOpenGL scheduling redraw for fresh composite\n");
+    fflush(stderr);
+    [self setNeedsDisplay:YES];
+  } else {
+    // GL context not ready yet (compositor hasn't called preRender).
+    // Retry after a short delay.
+    static int retries = 0;
+    if (retries < 20) {
+      retries++;
+      fprintf(stderr, "TIGER_GL: forceRefreshOpenGL retry %d (context not ready)\n", retries);
+      fflush(stderr);
+      [self performSelector:@selector(forceRefreshOpenGL) withObject:nil afterDelay:0.1];
+    }
+  }
 
   NS_OBJC_END_TRY_ABORT_BLOCK;
 }
@@ -3458,6 +3515,8 @@ NSEvent* gLastDragMouseDownEvent = nil;
     mGLContext = aGLContext;
     [mGLContext retain];
     mNeedsGLUpdate = YES;
+    fprintf(stderr, "TIGER_GL: preRender stored GL context\n");
+    fflush(stderr);
   }
 
   CGLLockContext((CGLContextObj)[aGLContext CGLContextObj]);
@@ -3718,6 +3777,28 @@ NSEvent* gLastDragMouseDownEvent = nil;
   CGContextRef cgContext = (CGContextRef)[[NSGraphicsContext currentContext] graphicsPort];
 
   if ([self isUsingOpenGL]) {
+    static bool logged = false;
+    if (!logged) {
+      NSRect viewFrame = [self frame];
+      NSRect hostFrame = [mPixelHostingView frame];
+      LayoutDeviceIntRect gb = mGeckoChild->GetBounds();
+      fprintf(stderr, "TIGER_GL: isUsingOpenGL=YES, mGLContext=%p, mUsingOMTCompositor=%d\n",
+              mGLContext, (int)mUsingOMTCompositor);
+      fprintf(stderr, "TIGER_GL: view frame=%.0f,%.0f %.0fx%.0f\n",
+              viewFrame.origin.x, viewFrame.origin.y, viewFrame.size.width, viewFrame.size.height);
+      fprintf(stderr, "TIGER_GL: host frame=%.0f,%.0f %.0fx%.0f\n",
+              hostFrame.origin.x, hostFrame.origin.y, hostFrame.size.width, hostFrame.size.height);
+      fprintf(stderr, "TIGER_GL: geckoBounds=%d,%d %dx%d\n", gb.x, gb.y, gb.width, gb.height);
+      fprintf(stderr, "TIGER_GL: isCoveringTitlebar=%d, drawsContentsIntoWindowFrame=%d\n",
+              (int)[self isCoveringTitlebar],
+              (int)[(BaseWindow*)[self window] drawsContentsIntoWindowFrame]);
+      if (mGeckoChild->GetLayerManager()) {
+        fprintf(stderr, "TIGER_GL: compositor backend=%d (1=basic,6=opengl)\n",
+                (int)mGeckoChild->GetLayerManager()->GetBackendType());
+      }
+      logged = true;
+    }
+
     // Since this view is usually declared as opaque, the window's pixel
     // buffer may now contain garbage which we need to prevent from reaching
     // the screen. The only place where garbage can show is in the window
@@ -3737,10 +3818,16 @@ NSEvent* gLastDragMouseDownEvent = nil;
       [self display];
     }
 
-    if (mNeedsGLUpdate) {
-        [mGLContext setView:mPixelHostingView];
-        [mGLContext update];
-        mNeedsGLUpdate = NO;
+    if (mNeedsGLUpdate && mGLContext) {
+        fprintf(stderr, "TIGER_GL: doDrawRect setting GL context view (mGLContext=%p)\n", mGLContext);
+        fflush(stderr);
+        CGLContextObj cglCtx = (CGLContextObj)[mGLContext CGLContextObj];
+        if (CGLLockContext(cglCtx) == kCGLNoError) {
+            [mGLContext setView:mPixelHostingView];
+            [mGLContext update];
+            mNeedsGLUpdate = NO;
+            CGLUnlockContext(cglCtx);
+        }
     }
 
     // Force a sync OMTC composite into the OpenGL context and return.
@@ -3861,7 +3948,7 @@ NSEvent* gLastDragMouseDownEvent = nil;
   CGLLockContext((CGLContextObj)[mGLContext CGLContextObj]);
   // Make the context opaque for fullscreen (since it performs better), and transparent
   // for windowed (since we need it for rounded corners).
-  GLint opaque = aOpaque ? 1 : 0;
+  long opaque = aOpaque ? 1 : 0;
   [mGLContext setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
   CGLUnlockContext((CGLContextObj)[mGLContext CGLContextObj]);
 }

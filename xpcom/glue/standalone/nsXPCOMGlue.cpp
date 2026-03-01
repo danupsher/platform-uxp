@@ -20,6 +20,11 @@ using namespace mozilla;
 
 #define XPCOM_DEPENDENT_LIBS_LIST "dependentlibs.list"
 
+/* RTLD_FIRST may be missing on older macOS SDKs (10.4) */
+#if defined(XP_MACOSX) && !defined(RTLD_FIRST)
+#define RTLD_FIRST 0x100
+#endif
+
 static XPCOMFunctions xpcomFunctions;
 static bool do_preload = false;
 

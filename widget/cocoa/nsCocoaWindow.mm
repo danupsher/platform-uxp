@@ -505,19 +505,26 @@ nsresult nsCocoaWindow::CreateNativeWindow(const NSRect &aRect,
     [mWindow setOpaque:YES];
   }
 
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   NSWindowCollectionBehavior newBehavior = [mWindow collectionBehavior];
   if (mAlwaysOnTop) {
     [mWindow setLevel:NSFloatingWindowLevel];
     newBehavior |= NSWindowCollectionBehaviorCanJoinAllSpaces;
   }
   [mWindow setCollectionBehavior:newBehavior];
+#else
+  if (mAlwaysOnTop) {
+    [mWindow setLevel:NSFloatingWindowLevel];
+  }
+#endif
 
   [mWindow setContentMinSize:NSMakeSize(60, 60)];
   [mWindow disableCursorRects];
 
   // Make sure the window starts out not draggable by the background.
-  // We will turn it on as necessary.
-  [mWindow setMovableByWindowBackground:NO];
+  // We will turn it on as necessary. (10.6+ API)
+  if ([mWindow respondsToSelector:@selector(setMovableByWindowBackground:)])
+    [mWindow setMovableByWindowBackground:NO];
 
   [[WindowDataMap sharedWindowDataMap] ensureDataForWindow:mWindow];
   mWindowMadeHere = true;
@@ -2240,6 +2247,7 @@ void nsCocoaWindow::SetShowsFullScreenButton(bool aShow)
     MakeFullScreen(false);
   }
 
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   NSWindowCollectionBehavior newBehavior = [mWindow collectionBehavior];
   if (aShow) {
     newBehavior |= NSWindowCollectionBehaviorFullScreenPrimary;
@@ -2247,6 +2255,7 @@ void nsCocoaWindow::SetShowsFullScreenButton(bool aShow)
     newBehavior &= ~NSWindowCollectionBehaviorFullScreenPrimary;
   }
   [mWindow setCollectionBehavior:newBehavior];
+#endif
   mSupportsNativeFullScreen = aShow;
 
   if (wasFullScreen) {
@@ -2788,7 +2797,7 @@ GetDPI(NSWindow* aWindow)
     return 96.0f;
 
   CGDirectDisplayID displayID =
-    [[[screen deviceDescription] objectForKey:@"NSScreenNumber"] intValue];
+    (CGDirectDisplayID)(uintptr_t)[[[screen deviceDescription] objectForKey:@"NSScreenNumber"] intValue];
   CGFloat heightMM = ::CGDisplayScreenSize(displayID).height;
   size_t heightPx = ::CGDisplayPixelsHigh(displayID);
   if (heightMM < 1 || heightPx < 1) {
@@ -3076,7 +3085,7 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
   }
   [state setObject:[NSNumber numberWithBool:[self showsToolbarButton]]
             forKey:kStateShowsToolbarButton];
-  [state setObject:[NSNumber numberWithUnsignedInt: [self collectionBehavior]]
+  [state setObject:[NSNumber numberWithUnsignedInt: (unsigned int)(uintptr_t)[self collectionBehavior]]
             forKey:kStateCollectionBehavior];
   return state;
 }
@@ -3175,6 +3184,7 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
 
 - (void)removeTrackingArea
 {
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   [mViewWithTrackingArea removeTrackingArea:mTrackingArea];
 
   [mTrackingArea release];
@@ -3182,10 +3192,12 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
 
   [mViewWithTrackingArea release];
   mViewWithTrackingArea = nil;
+#endif
 }
 
 - (void)updateTrackingArea
 {
+#if defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
   [self removeTrackingArea];
 
   mViewWithTrackingArea = [self.trackingAreaView retain];
@@ -3197,6 +3209,7 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
                                      owner:self
                                   userInfo:nil];
   [mViewWithTrackingArea addTrackingArea:mTrackingArea];
+#endif
 }
 
 - (void)mouseEntered:(NSEvent*)aEvent
@@ -3402,8 +3415,10 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
     }
 #endif
 
-    [self setAutorecalculatesContentBorderThickness:NO forEdge:NSMaxYEdge];
-    [self setContentBorderThickness:0.0f forEdge:NSMaxYEdge];
+    if ([self respondsToSelector:@selector(setAutorecalculatesContentBorderThickness:forEdge:)]) {
+      [self setAutorecalculatesContentBorderThickness:NO forEdge:NSMaxYEdge];
+      [self setContentBorderThickness:0.0f forEdge:NSMaxYEdge];
+    }
   }
   return self;
 
@@ -3612,7 +3627,8 @@ static const NSString* kStateCollectionBehavior = @"collectionBehavior";
 - (void)setSheetAttachmentPosition:(CGFloat)aY
 {
   CGFloat topMargin = aY - [self titlebarHeight];
-  [self setContentBorderThickness:topMargin forEdge:NSMaxYEdge];
+  if ([self respondsToSelector:@selector(setContentBorderThickness:forEdge:)])
+    [self setContentBorderThickness:topMargin forEdge:NSMaxYEdge];
 }
 
 - (void)placeWindowButtons:(NSRect)aRect

@@ -171,6 +171,12 @@ public:
   virtual void PushClip(const Path *) override;
   virtual void PushClipRect(const Rect &aRect) override;
   virtual void PopClip() override;
+  virtual void PushLayer(bool aOpaque, Float aOpacity,
+                         SourceSurface* aMask,
+                         const Matrix& aMaskTransform,
+                         const IntRect& aBounds = IntRect(),
+                         bool aCopyBackground = false) override;
+  virtual void PopLayer() override;
   virtual already_AddRefed<SourceSurface> CreateSourceSurfaceFromNativeSurface(const NativeSurface&) const override { return nullptr;}
   virtual already_AddRefed<DrawTarget> CreateSimilarDrawTarget(const IntSize &, SurfaceFormat) const override;
   virtual already_AddRefed<PathBuilder> CreatePathBuilder(FillRule) const override;
@@ -218,6 +224,7 @@ private:
 
   RefPtr<SourceSurfaceCGContext> mSnapshot;
   bool mMayContainInvalidPremultipliedData;
+  bool mIsBitmapContext;
 };
 
 } // namespace gfx

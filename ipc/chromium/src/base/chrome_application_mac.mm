@@ -6,14 +6,15 @@
 
 #include "base/logging.h"
 
-@interface CrApplication ()
-@property(readwrite,
-          getter=isHandlingSendEvent,
-          nonatomic) BOOL handlingSendEvent;
-@end
-
 @implementation CrApplication
-@synthesize handlingSendEvent = handlingSendEvent_;
+
+- (BOOL)isHandlingSendEvent {
+  return handlingSendEvent_;
+}
+
+- (void)setHandlingSendEvent:(BOOL)flag {
+  handlingSendEvent_ = flag;
+}
 
 // Initialize NSApplication using the custom subclass.  Check whether NSApp
 // was already initialized using another class, because that would break

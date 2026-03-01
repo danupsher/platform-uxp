@@ -24,9 +24,9 @@
 #include <linux/fadvise.h>
 #endif // defined(XP_LINUX)
 
-#if defined(XP_MACOSX)
+#if defined(XP_MACOSX) && defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5
 #include "copyfile.h"
-#endif // defined(XP_MACOSX)
+#endif // defined(XP_MACOSX) && 10.5+
 
 #if defined(XP_WIN)
 #include <windows.h>
@@ -661,7 +661,11 @@ static const dom::ConstantSpec gLibcProperties[] =
 #if defined(dirfd)
   { "OSFILE_SIZEOF_DIR", JS::Int32Value(sizeof (DIR)) },
 
+#if defined(__dd_fd) || (defined(MAC_OS_X_VERSION_10_5) && MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_5)
   { "OSFILE_OFFSETOF_DIR_DD_FD", JS::Int32Value(offsetof (DIR, __dd_fd)) },
+#else
+  { "OSFILE_OFFSETOF_DIR_DD_FD", JS::Int32Value(offsetof (DIR, dd_fd)) },
+#endif
 #endif
 
   // Defining |stat|
