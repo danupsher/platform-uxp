@@ -223,8 +223,13 @@ ProgramProfileOGL::GetProfileFor(ShaderConfigOGL aConfig)
   if (aConfig.mFeatures & ENABLE_DYNAMIC_GEOMETRY) {
     vs << "  vec4 finalPosition = vec4(aCoord.xy, 0.0, 1.0);" << endl;
   } else {
+    // Tiger: use constant-index if/else for GLSL 1.05 compat (no variable array indexing)
     vs << "  int vertexID = int(aCoord.w);" << endl;
-    vs << "  vec4 layerRect = uLayerRects[vertexID];" << endl;
+    vs << "  vec4 layerRect;" << endl;
+    vs << "  if (vertexID == 0) layerRect = uLayerRects[0];" << endl;
+    vs << "  else if (vertexID == 1) layerRect = uLayerRects[1];" << endl;
+    vs << "  else if (vertexID == 2) layerRect = uLayerRects[2];" << endl;
+    vs << "  else layerRect = uLayerRects[3];" << endl;
     vs << "  vec4 finalPosition = vec4(aCoord.xy * layerRect.zw + layerRect.xy, 0.0, 1.0);" << endl;
   }
 
@@ -285,7 +290,11 @@ ProgramProfileOGL::GetProfileFor(ShaderConfigOGL aConfig)
       if (aConfig.mFeatures & ENABLE_DYNAMIC_GEOMETRY) {
         vs << "  vTexCoord = (uTextureTransform * vec4(aTexCoord, 0.0, 1.0)).xy;" << endl;
       } else {
-        vs << "  vec4 textureRect = uTextureRects[vertexID];" << endl;
+        vs << "  vec4 textureRect;" << endl;
+    vs << "  if (vertexID == 0) textureRect = uTextureRects[0];" << endl;
+    vs << "  else if (vertexID == 1) textureRect = uTextureRects[1];" << endl;
+    vs << "  else if (vertexID == 2) textureRect = uTextureRects[2];" << endl;
+    vs << "  else textureRect = uTextureRects[3];" << endl;
         vs << "  vec2 texCoord = coordAdjusted.xy * textureRect.zw + textureRect.xy;" << endl;
         vs << "  vTexCoord = (uTextureTransform * vec4(texCoord, 0.0, 1.0)).xy;" << endl;
       }
@@ -294,7 +303,11 @@ ProgramProfileOGL::GetProfileFor(ShaderConfigOGL aConfig)
     if (aConfig.mFeatures & ENABLE_DYNAMIC_GEOMETRY) {
       vs << "  vTexCoord = (uTextureTransform * vec4(aTexCoord, 0.0, 1.0)).xy;" << endl;
     } else {
-      vs << "  vec4 textureRect = uTextureRects[vertexID];" << endl;
+      vs << "  vec4 textureRect;" << endl;
+    vs << "  if (vertexID == 0) textureRect = uTextureRects[0];" << endl;
+    vs << "  else if (vertexID == 1) textureRect = uTextureRects[1];" << endl;
+    vs << "  else if (vertexID == 2) textureRect = uTextureRects[2];" << endl;
+    vs << "  else textureRect = uTextureRects[3];" << endl;
       vs << "  vec2 texCoord = aCoord.xy * textureRect.zw + textureRect.xy;" << endl;
       vs << "  vTexCoord = (uTextureTransform * vec4(texCoord, 0.0, 1.0)).xy;" << endl;
     }

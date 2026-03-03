@@ -323,8 +323,14 @@ GLContextProviderCGL::CreateForWindow(nsIWidget* aWidget, bool aForceAccelerated
         return nullptr;
     }
 
-    // make the context transparent
+    // Tiger PPC: make the context opaque (no rounded window corners on Tiger,
+    // transparent surface causes black artifacts with GL clear)
+#if !defined(MAC_OS_X_VERSION_10_6) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6)
+    long opaque = 1;
+#else
+    // make the context transparent for rounded window corners on 10.5+
     long opaque = 0;
+#endif
     [context setValues:&opaque forParameter:NSOpenGLCPSurfaceOpacity];
 
     SurfaceCaps caps = SurfaceCaps::ForRGBA();

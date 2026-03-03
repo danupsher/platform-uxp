@@ -1329,11 +1329,6 @@ NS_IMETHODIMP nsChildView::Invalidate(const LayoutDeviceIntRect& aRect)
 bool
 nsChildView::WidgetTypeSupportsAcceleration()
 {
-  // Tiger PPC: GL compositing causes black bars during scroll.
-  // nsCocoaFeatures clamps min version to 10.5, so use compile-time check.
-#if !defined(MAC_OS_X_VERSION_10_6) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6)
-  return false;
-#endif
   // Don't use OpenGL for transparent windows or for popup windows.
   return mView && [[mView window] isOpaque] &&
          ![[mView window] isKindOfClass:[PopupWindow class]];
@@ -1342,12 +1337,6 @@ nsChildView::WidgetTypeSupportsAcceleration()
 bool
 nsChildView::ShouldUseOffMainThreadCompositing()
 {
-  // Tiger PPC: OMTC GL compositing causes black bars during scroll.
-  // nsCocoaFeatures clamps min version to 10.5, so use compile-time check.
-#if !defined(MAC_OS_X_VERSION_10_6) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_6)
-  return false;
-#endif
-
   // Don't use OMTC for transparent windows or for popup windows.
   if (!mView || ![[mView window] isOpaque] ||
       [[mView window] isKindOfClass:[PopupWindow class]])
@@ -3492,7 +3481,20 @@ NSEvent* gLastDragMouseDownEvent = nil;
   if (!mGLContext) {
     mGLContext = aGLContext;
     [mGLContext retain];
-    mNeedsGLUpdate = YES;
+
+
+    // Attach the GL context to the view immediately so SwapBuffers has a drawable.
+    // On Tiger, forceRefreshOpenGL may have already fired (as no-op) while mGLContext
+    // was nil, so we need to set the view here and reset the refresh flag.
+    CGLLockContext((CGLContextObj)[aGLContext CGLContextObj]);
+    [mGLContext setView:mPixelHostingView];
+    [mGLContext update];
+    CGLUnlockContext((CGLContextObj)[aGLContext CGLContextObj]);
+    mNeedsGLUpdate = NO;
+    // Don't reset mDidForceRefreshOpenGL - the 603134 workaround's clearDrawable
+    // disrupts the compositor thread. We've already set the view here.
+
+
   }
 
   CGLLockContext((CGLContextObj)[aGLContext CGLContextObj]);
