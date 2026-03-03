@@ -2135,6 +2135,10 @@ gfxPlatform::AccelerateLayersByDefault()
 bool
 gfxPlatform::BufferRotationEnabled()
 {
+#if !defined(MAC_OS_X_VERSION_10_5) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5)
+  // Tiger: GPU lacks NPOT textures; buffer rotation wraps into black POT padding
+  return false;
+#endif
   MutexAutoLock autoLock(*gGfxPlatformPrefsLock);
 
   return sBufferRotationCheckPref && gfxPrefs::BufferRotationEnabled();
