@@ -676,6 +676,23 @@ CompositorOGL::BeginFrame(const nsIntRegion& aInvalidRegion,
   mWindowRenderTarget = mCurrentRenderTarget;
 #endif
 
+  // Tiger flip diagnostic: log projection matrix state every 500 frames
+  {
+    static int sFrameNum = 0;
+    static float sLastProj22 = 0.0f;
+    sFrameNum++;
+    // Log if projection Y-scale changed or every 500 frames
+    if (mProjMatrix._22 != sLastProj22 || sFrameNum % 500 == 1) {
+      fprintf(stderr, "FLIP_DIAG frame=%d proj22=%.4f proj12=%.4f isWindow=%d fbo=%d vp=%dx%d offscreen=%d\n",
+              sFrameNum, mProjMatrix._22, mProjMatrix._12,
+              mCurrentRenderTarget ? static_cast<CompositingRenderTargetOGL*>(mCurrentRenderTarget.get())->IsWindow() : -1,
+              mCurrentRenderTarget ? static_cast<CompositingRenderTargetOGL*>(mCurrentRenderTarget.get())->GetFBO() : -1,
+              width, height,
+              mGLContext->IsOffscreen() ? 1 : 0);
+      sLastProj22 = mProjMatrix._22;
+    }
+  }
+
   if (aClipRectOut && !aClipRectIn) {
     aClipRectOut->SetRect(0, 0, width, height);
   }
@@ -1123,6 +1140,22 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
   program->SetLayerTransform(aTransform);
   LayerScope::SetLayerTransform(aTransform);
 
+  // Tiger flip diagnostic: detect if any layer transform has Y-flip
+  {
+    static int sDrawNum = 0;
+    static bool sReportedFlip = false;
+    sDrawNum++;
+    // Check for negative Y scaling in the layer transform
+    if (aTransform._22 < 0 && !sReportedFlip) {
+      fprintf(stderr, "FLIP_DIAG draw=%d NEGATIVE_Y_SCALE transform22=%.4f transform11=%.4f effect=%d\n",
+              sDrawNum, aTransform._22, aTransform._11,
+              (int)aEffectChain.mPrimaryEffect->mType);
+      sReportedFlip = true;
+    }
+    // Reset reporting each frame (frame boundary detected by draw=1-ish pattern)
+    if (sDrawNum % 10000 == 0) sReportedFlip = false;
+  }
+
   if (colorMatrix) {
       EffectColorMatrix* effectColorMatrix =
         static_cast<EffectColorMatrix*>(aEffectChain.mSecondaryEffects[EffectTypes::COLOR_MATRIX].get());
@@ -1358,6 +1391,7 @@ CompositorOGL::DrawGeometry(const Geometry& aGeometry,
     }
     break;
   case EffectTypes::RENDER_TARGET: {
+      // (Tiger diagnostic removed — testing with no intermediate surfaces instead)
       EffectRenderTarget* effectRenderTarget =
         static_cast<EffectRenderTarget*>(aEffectChain.mPrimaryEffect.get());
       RefPtr<CompositingRenderTargetOGL> surface

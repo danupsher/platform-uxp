@@ -58,6 +58,7 @@ static int (*CGFontGetLeadingPtr) (CGFontRef fontRef) = NULL;
 /* CTFontCreateWithGraphicsFont is not public until 10.5. */
 typedef const struct __CTFontDescriptor *CTFontDescriptorRef;
 static CTFontRef (*CTFontCreateWithGraphicsFontPtr) (CGFontRef, CGFloat, const CGAffineTransform *, CTFontDescriptorRef) = NULL;
+static CGPathRef (*CTFontCreatePathForGlyphPtr) (CTFontRef, CGGlyph, const CGAffineTransform *) = NULL;
 
 static cairo_bool_t _cairo_quartz_font_symbol_lookup_done = FALSE;
 static cairo_bool_t _cairo_quartz_font_symbols_present = FALSE;
@@ -100,6 +101,7 @@ quartz_font_ensure_symbols(void)
        it on 10.5+ where the implementation is solid. */
 #if !defined(MAC_OS_X_VERSION_MIN_REQUIRED) || MAC_OS_X_VERSION_MIN_REQUIRED >= 1050
     CTFontCreateWithGraphicsFontPtr = dlsym(RTLD_DEFAULT, "CTFontCreateWithGraphicsFont");
+    CTFontCreatePathForGlyphPtr = dlsym(RTLD_DEFAULT, "CTFontCreatePathForGlyph");
 #endif
 
     if ((CGFontCreateWithFontNamePtr || CGFontCreateWithNamePtr) &&
@@ -552,7 +554,9 @@ _cairo_quartz_init_glyph_path (cairo_quartz_scaled_font_t *font,
     }
     if (!ctFont)
 	return CAIRO_INT_STATUS_UNSUPPORTED;
-    glyphPath = CTFontCreatePathForGlyph (ctFont, glyph, &textMatrix);
+    if (!CTFontCreatePathForGlyphPtr)
+	return CAIRO_INT_STATUS_UNSUPPORTED;
+    glyphPath = CTFontCreatePathForGlyphPtr (ctFont, glyph, &textMatrix);
     CFRelease (ctFont);
     if (!glyphPath)
 	return CAIRO_INT_STATUS_UNSUPPORTED;

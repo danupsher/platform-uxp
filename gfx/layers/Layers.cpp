@@ -1431,6 +1431,11 @@ ContainerLayer::DefaultComputeEffectiveTransforms(const Matrix4x4& aTransformToS
 
   NS_ASSERTION(!Extend3DContext() || !useIntermediateSurface, "Can't have an intermediate surface with preserve-3d!");
 
+#if !defined(MAC_OS_X_VERSION_10_5) || (MAC_OS_X_VERSION_MAX_ALLOWED < MAC_OS_X_VERSION_10_5)
+  // Tiger diagnostic: force-disable intermediate surfaces to test if FBO ops cause the flip
+  useIntermediateSurface = false;
+#endif
+
   if (useIntermediateSurface) {
     mEffectiveTransform = SnapTransformTranslation(idealTransform, &residual);
   } else {
