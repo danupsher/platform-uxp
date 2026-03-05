@@ -44,3 +44,19 @@ a future for XUL.
 As of [`Issue #969`](https://repo.palemoon.org/MoonchildProductions/UXP/issues/969), release version `28.9.0`,
 applications have been split off into their own dedicated (front-end) repositories, with Pale Moon located at
 [`MoonchildProductions/Pale-Moon`](https://repo.palemoon.org/MoonchildProductions/Pale-Moon).
+
+---
+
+## Tiger PPC Fork (tiger-ppc branch)
+
+This fork adds **Mac OS X 10.4 Tiger on PowerPC** support for use with [MachFox](https://github.com/danupsher/machfox-browser).
+
+### Changes from upstream
+
+- **GPU compositing fixes**: CompositorOGL works on OpenGL 1.5 / GLSL 1.05 (Radeon 9600). Constant-index shader workarounds, buffer rotation disabled for non-NPOT GPUs, FBO intermediate surfaces disabled.
+- **Tiger compatibility**: statfs fix for Tiger (lacks statvfs64), sqlite version check relaxed, libxul build adjustments.
+- **GL context timing**: View attachment fix for Tiger compositor thread startup.
+
+### Building
+
+Used as a submodule of [machfox-browser](https://github.com/danupsher/machfox-browser). Cross-compiled from Linux with the [GCC 15 + ld64 cross-compiler](https://github.com/danupsher/tiger-ppc-builds).
