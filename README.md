@@ -1,62 +1,33 @@
-# Unified XUL Platform (UXP)
+# Unified XUL Platform (UXP) — Tiger PPC Fork
 
-This repository holds the code for a unified application platform for XUL-based
-applications. It is a hard fork from the Mozilla code repository (mozilla-central)
-with an ESR-52 fork point.
+Fork of UXP with patches for cross-compiling to **Mac OS X 10.4 Tiger** on **PowerPC** (G3/G4/G5).
 
-In addition to further development based on the Mozilla upstream code, and
-selective cherry-picking of directly-applicable patches, this repository has its
-own development and holds the base for a maintained platform to be used by XUL
-applications.
+This is the platform layer for [MachFox](https://github.com/danupsher/machfox-browser), a Tiger PPC web browser.
 
-## Additional documentation
+## Tiger PPC Changes
 
-Additional documentation relevant to this source code can be found in the `/docs`
-directory. This will contain relevant documentation regarding contributing,
-using and distributing this code and its binaries.
+- OpenGL compositor fixes for GLSL 1.05 / OpenGL 1.5 (Radeon 9600 era GPUs)
+- Buffer rotation disabled for non-NPOT GPUs
+- FBO intermediate surfaces disabled (fixes Y-flip rendering)
+- GL context view attachment timing fix for Tiger compositor thread
+- Cairo font rendering fixes for Tiger
+- Various 10.4 SDK compatibility patches
 
-If you are interested in the development and building side of things, some
-information will be available on the [Pale Moon developer site](http://developer.palemoon.org).
-You are also always welcome to get in touch with our community on the [Pale Moon forum](https://forum.palemoon.org/).
+## Building
 
-### Code search
+Cross-compiled from Linux using the [PPC Tiger Cross-Compiler v1.3](https://github.com/danupsher/tiger-ppc-builds/releases/tag/gcc15-xcompiler-1.3) (GCC 15.2.0 + ld64).
 
-While our repo has basic code searching capabilities (via `git grep`), you are strongly
-encouraged to instead use the dedicated code search and cross-referencing site:
-[https://xref.palemoon.org/](https://xref.palemoon.org/)
-This repo and a copy of the front-end are amalgamated in the `goanna-central` index.
+See the [MachFox browser repo](https://github.com/danupsher/machfox-browser) for build instructions and `mozconfig`.
 
-### A note about trademarks and branding
+## Releases
 
-Although this repository is primarily licensed under Mozilla Public License v2.0, the
-trademarks and brands contained herein remain the property of their respective
-owners. For more details, please see the notifications in the respective directories.
+- **[v3.1](https://github.com/danupsher/platform-uxp/releases/tag/tiger-ppc-v3.1)** — Re-linked with G3-safe runtime libraries. Fixes G4/G3 crash.
+- **[v3.0](https://github.com/danupsher/platform-uxp/releases/tag/tiger-ppc-v3.0)** — Initial release with GPU compositing.
 
-### Foundation and maintainership
+## Upstream
 
-This repository has been founded by Moonchild (M.C. Straver) and is maintained by him
-and other community members.
-If you fork this repository to perform your own work on it, please consider offering
-improvement patches upstream to its origin to mutually improve the platform and build
-a future for XUL.
+Based on UXP from [ArcticFoxie/ArcticFox](https://github.com/ArcticFoxie/ArcticFox) / Pale Moon. See `master` branch for unmodified upstream.
 
-## Looking for Pale Moon?
-As of [`Issue #969`](https://repo.palemoon.org/MoonchildProductions/UXP/issues/969), release version `28.9.0`,
-applications have been split off into their own dedicated (front-end) repositories, with Pale Moon located at
-[`MoonchildProductions/Pale-Moon`](https://repo.palemoon.org/MoonchildProductions/Pale-Moon).
+## License
 
----
-
-## Tiger PPC Fork (tiger-ppc branch)
-
-This fork adds **Mac OS X 10.4 Tiger on PowerPC** support for use with [MachFox](https://github.com/danupsher/machfox-browser).
-
-### Changes from upstream
-
-- **GPU compositing fixes**: CompositorOGL works on OpenGL 1.5 / GLSL 1.05 (Radeon 9600). Constant-index shader workarounds, buffer rotation disabled for non-NPOT GPUs, FBO intermediate surfaces disabled.
-- **Tiger compatibility**: statfs fix for Tiger (lacks statvfs64), sqlite version check relaxed, libxul build adjustments.
-- **GL context timing**: View attachment fix for Tiger compositor thread startup.
-
-### Building
-
-Used as a submodule of [machfox-browser](https://github.com/danupsher/machfox-browser). Cross-compiled from Linux with the [GCC 15 + ld64 cross-compiler](https://github.com/danupsher/tiger-ppc-builds).
+Mozilla Public License v2.0. See individual directories for additional trademark notices.
