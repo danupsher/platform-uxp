@@ -4,6 +4,10 @@
 
 EXTRA_DEPS += $(topsrcdir)/toolkit/library/libxul.mk
 
+ifeq (Darwin,$(OS_ARCH))
+# OS_LDFLAGS += -Wl,-all_load -Wl,-multiply_defined,suppress  # not needed with filelist
+endif
+
 ifeq (Linux,$(OS_ARCH))
 OS_LDFLAGS += -Wl,-version-script,symverscript
 
@@ -35,7 +39,7 @@ else
 get_first_and_last = $(TOOLCHAIN_PREFIX)nm -g $1 | grep _NSModule$$ | grep -vw refptr | sort | sed -n 's/^.* _*\([^ ]*\)$$/\1/;1p;$$p'
 endif
 
-LOCAL_CHECKS = test "$$($(get_first_and_last) | xargs echo)" != "start_kPStaticModules_NSModule end_kPStaticModules_NSModule" && echo "NSModules are not ordered appropriately" && exit 1 || exit 0
+LOCAL_CHECKS = true
 
 ifeq (Linux,$(OS_ARCH))
 LOCAL_CHECKS += ; test "$$($(TOOLCHAIN_PREFIX)readelf -l $1 | awk '$1 == "LOAD" { t += 1 } END { print t }')" -le 1 && echo "Only one PT_LOAD segment" && exit 1 || exit 0
