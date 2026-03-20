@@ -3,6 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#include <cstdio>
 #include "mozilla/layers/CompositorBridgeChild.h"
 #include "mozilla/layers/CompositorThread.h"
 #include "mozilla/layers/ImageBridgeChild.h"
@@ -567,11 +568,13 @@ gfxPlatform::Init()
     nsCOMPtr<nsIGfxInfo> gfxInfo;
     /* this currently will only succeed on Windows */
     gfxInfo = services::GetGfxInfo();
+    fprintf(stderr, "PPC-STARTUP: GfxInfo done\n");
 
 #if defined(XP_WIN)
     gPlatform = new gfxWindowsPlatform;
 #elif defined(XP_MACOSX)
     gPlatform = new gfxPlatformMac;
+    fprintf(stderr, "PPC-STARTUP: gfxPlatformMac created\n");
 #elif defined(MOZ_WIDGET_GTK)
     gPlatform = new gfxPlatformGtk;
 #elif defined(ANDROID)
@@ -579,7 +582,9 @@ gfxPlatform::Init()
 #else
     #error "No gfxPlatform implementation available"
 #endif
+    fprintf(stderr, "PPC-STARTUP: calling InitAcceleration\n");
     gPlatform->InitAcceleration();
+    fprintf(stderr, "PPC-STARTUP: InitAcceleration done\n");
 
     if (gfxConfig::IsEnabled(Feature::GPU_PROCESS)) {
       GPUProcessManager* gpu = GPUProcessManager::Get();
@@ -612,7 +617,9 @@ gfxPlatform::Init()
 
     nsresult rv;
 
+    fprintf(stderr, "PPC-STARTUP: calling FontList::Init\n");
     rv = gfxPlatformFontList::Init();
+    fprintf(stderr, "PPC-STARTUP: FontList::Init done rv=%d\n", (int)rv);
     if (NS_FAILED(rv)) {
         NS_RUNTIMEABORT("Could not initialize gfxPlatformFontList");
     }
@@ -632,7 +639,9 @@ gfxPlatform::Init()
       NS_RUNTIMEABORT("Could not initialize mScreenReferenceDrawTarget");
     }
 
+    fprintf(stderr, "PPC-STARTUP: calling FontCache::Init\n");
     rv = gfxFontCache::Init();
+    fprintf(stderr, "PPC-STARTUP: FontCache::Init done\n");
     if (NS_FAILED(rv)) {
         NS_RUNTIMEABORT("Could not initialize gfxFontCache");
     }

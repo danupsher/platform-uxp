@@ -17,6 +17,9 @@
 #include <ctype.h>
 #include <limits>
 #include <string.h>
+#if defined(JS_CODEGEN_PPC)
+#include <cstdio>
+#endif
 
 #include "jsapi.h"
 #include "jsarray.h"
@@ -549,6 +552,22 @@ js::SubstringKernel(JSContext* cx, HandleString str, int32_t beginInt, int32_t l
     MOZ_ASSERT(0 <= lengthInt);
     MOZ_ASSERT(uint32_t(beginInt) <= str->length());
     MOZ_ASSERT(uint32_t(lengthInt) <= str->length() - beginInt);
+
+#if defined(JS_CODEGEN_PPC)
+    // PPC safety: catch bad args (negative length or begin past end)
+    if (lengthInt < 0 || beginInt < 0 ||
+        uint32_t(beginInt) > str->length() ||
+        uint32_t(lengthInt) > str->length() - uint32_t(beginInt)) {
+        static int subkernel_report_count = 0;
+        if (subkernel_report_count < 10) {
+            subkernel_report_count++;
+            fprintf(stderr, "PPC-SUBKERNEL-GUARD: begin=%d len=%d str->length()=%zu\n",
+                    beginInt, lengthInt, str->length());
+            fflush(stderr);
+        }
+        return cx->emptyString();
+    }
+#endif
 
     uint32_t begin = beginInt;
     uint32_t len = lengthInt;

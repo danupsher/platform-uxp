@@ -6,6 +6,7 @@
 #include "mozilla/ArrayUtils.h"
 
 #include "ManifestParser.h"
+#include <cstdio>
 
 #include <string.h>
 
@@ -487,11 +488,15 @@ ParseManifest(NSLocationType aType, FileLocation& aFile, char* aBuf,
   nsAutoString abi;
   nsAutoString process;
 
+  fprintf(stderr, "PPC-MANIFEST: ParseManifest called, aXPTOnly=%d\n", aXPTOnly);
   nsCOMPtr<nsIXULAppInfo> xapp;
   if (!aXPTOnly) {
     // Avoid to create any component for XPT only mode.
     // No xapp means no ID, version, ..., modifiers checking.
     xapp = do_GetService(XULAPPINFO_SERVICE_CONTRACTID);
+  }
+  if (!xapp) {
+    fprintf(stderr, "PPC-MANIFEST: xapp is NULL, appID filtering will fail!\n");
   }
   if (xapp) {
     nsAutoCString s;
@@ -499,6 +504,7 @@ ParseManifest(NSLocationType aType, FileLocation& aFile, char* aBuf,
     if (NS_SUCCEEDED(rv)) {
       CopyUTF8toUTF16(s, appID);
     }
+    fprintf(stderr, "PPC-MANIFEST: appID=%s\n", s.get());
 
     rv = xapp->GetVersion(s);
     if (NS_SUCCEEDED(rv)) {

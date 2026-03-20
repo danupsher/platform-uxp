@@ -3,6 +3,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#if defined(JS_CODEGEN_PPC)
+#include <cstdio>
+#endif
 #include "vm/String-inl.h"
 
 #include "mozilla/MathAlgorithms.h"
@@ -608,6 +611,24 @@ js::ConcatStrings(ExclusiveContext* cx,
     if (rightLen == 0)
         return left;
 
+#if defined(JS_CODEGEN_PPC)
+    // PPC guard: detect corrupted string lengths before they cause memcpy overflow.
+    // Returns nullptr so the CanGC fallback is tried.
+    if (leftLen > JSString::MAX_LENGTH || rightLen > JSString::MAX_LENGTH) {
+        fprintf(stderr, "PPC-CONCAT-GUARD: bad len L=%p/%zu R=%p/%zu\n",
+                (void*)static_cast<JSString*>(left), leftLen,
+                (void*)static_cast<JSString*>(right), rightLen);
+        uint32_t* lraw = (uint32_t*)(void*)static_cast<JSString*>(left);
+        uint32_t* rraw = (uint32_t*)(void*)static_cast<JSString*>(right);
+        fprintf(stderr, "PPC-CONCAT-RAW: L[%08x %08x %08x %08x %08x %08x]\n",
+                lraw[0], lraw[1], lraw[2], lraw[3], lraw[4], lraw[5]);
+        fprintf(stderr, "PPC-CONCAT-RAW: R[%08x %08x %08x %08x %08x %08x]\n",
+                rraw[0], rraw[1], rraw[2], rraw[3], rraw[4], rraw[5]);
+        fflush(stderr);
+        return nullptr;
+    }
+#endif
+
     size_t wholeLength = leftLen + rightLen;
     if (MOZ_UNLIKELY(wholeLength > JSString::MAX_LENGTH)) {
         // Don't report an exception if GC is not allowed, just return nullptr.
@@ -1128,6 +1149,14 @@ js::NewDependentString(JSContext* cx, JSString* baseArg, size_t start, size_t le
 
     if (start == 0 && length == base->length())
         return base;
+
+#if defined(JS_CODEGEN_PPC)
+    // PPC safety: catch unsigned underflow from callers who compute
+    // length = base->length() - start when start > base->length().
+    if (start > base->length() || length > base->length() - start) {
+        return cx->emptyString();
+    }
+#endif
 
     if (base->hasTwoByteChars()) {
         AutoCheckCannotGC nogc;

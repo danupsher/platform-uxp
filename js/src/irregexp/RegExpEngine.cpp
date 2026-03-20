@@ -31,6 +31,7 @@
 
 #include "irregexp/NativeRegExpMacroAssembler.h"
 #include "irregexp/RegExpCharacters.h"
+#include "irregexp/RegExpStack.h"
 #include "irregexp/RegExpMacroAssembler.h"
 #include "jit/ExecutableAllocator.h"
 #include "jit/JitCommon.h"
@@ -1251,7 +1252,7 @@ SampleChars(FrequencyCollator* collator, const CharT* chars, size_t length)
 static bool
 IsNativeRegExpEnabled(JSContext* cx)
 {
-#ifdef JS_CODEGEN_NONE
+#if defined(JS_CODEGEN_NONE)
     return false;
 #else
     return cx->options().nativeRegExp();
@@ -1385,6 +1386,21 @@ irregexp::ExecuteCode(JSContext* cx, jit::JitCode* codeBlock, const CharT* chars
     InputOutputData data(chars, chars + length, start, matches, endIndex);
 
     RegExpCodeSignature function = reinterpret_cast<RegExpCodeSignature>(codeBlock->raw());
+
+#if defined(JS_CODEGEN_PPC)
+    // Diagnostic: check regexp stack base
+    void* stackBase = cx->runtime()->regexpStack.base();
+    static int ppc_regexp_count = 0;
+    ppc_regexp_count++;
+    if (ppc_regexp_count <= 5 || stackBase == nullptr || (ppc_regexp_count % 100 == 0)) {
+        fprintf(stderr, "PPC-REGEXP[%d]: code=%p base=%p len=%zu start=%zu\n",
+                ppc_regexp_count, (void*)codeBlock->raw(), stackBase, length, start);
+    }
+    if (stackBase == nullptr) {
+        fprintf(stderr, "PPC-REGEXP: NULL STACK BASE! Skipping execution.\n");
+        return RegExpRunStatus_Error;
+    }
+#endif
 
     {
         JS::AutoSuppressGCAnalysis nogc;

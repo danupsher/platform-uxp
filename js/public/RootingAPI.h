@@ -14,6 +14,7 @@
 #include "mozilla/TypeTraits.h"
 
 #include <type_traits>
+#include <cstdio>
 
 #include "jspubtd.h"
 
@@ -800,8 +801,15 @@ class MOZ_RAII Rooted : public js::RootedBase<T, Rooted<T>>
     }
 
     ~Rooted() {
-        MOZ_ASSERT(*stack == reinterpret_cast<Rooted<void*>*>(this));
-        *stack = prev;
+        Rooted<void*>** volatile s = stack;
+        if (__builtin_expect(s == nullptr, 0)) {
+            fprintf(stderr, "PPC-ROOT-BUG: null stack in ~Rooted this=%p prev=%p\n",
+                    (void*)this, (void*)prev);
+            fflush(stderr);
+            return;
+        }
+        MOZ_ASSERT(*s == reinterpret_cast<Rooted<void*>*>(this));
+        *s = prev;
     }
 
     Rooted<T>* previous() { return reinterpret_cast<Rooted<T>*>(prev); }

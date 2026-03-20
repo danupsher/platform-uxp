@@ -313,8 +313,15 @@ ProtectionSettingToFlags(ProtectionSetting protection)
 {
     switch (protection) {
       case ProtectionSetting::Protected:  return PROT_NONE;
+#if defined(__ppc__) || defined(__powerpc__)
+      // Tiger/PPC doesn't enforce W^X. Use RWX permanently to avoid
+      // KERN_PROTECTION_FAILURE during GC barrier toggling (togglePreBarriers).
+      case ProtectionSetting::Writable:   return PROT_READ | PROT_WRITE | PROT_EXEC;
+      case ProtectionSetting::Executable: return PROT_READ | PROT_WRITE | PROT_EXEC;
+#else
       case ProtectionSetting::Writable:   return PROT_READ | PROT_WRITE;
       case ProtectionSetting::Executable: return PROT_READ | PROT_EXEC;
+#endif
     }
     MOZ_CRASH();
 }
@@ -322,6 +329,14 @@ ProtectionSettingToFlags(ProtectionSetting protection)
 static void
 CommitPages(void* addr, size_t bytes, ProtectionSetting protection)
 {
+#if defined(__ppc__) || defined(__powerpc__)
+    // PPC Tiger: Use mprotect instead of mmap MAP_FIXED to avoid
+    // potential issues with MAP_FIXED replacing adjacent mappings.
+    int rv = mprotect(addr, bytes, ProtectionSettingToFlags(protection));
+    MOZ_RELEASE_ASSERT(rv == 0);
+    fprintf(stderr, "PPC-COMMIT: addr=%p size=%zu\n", addr, bytes);
+    memset(addr, 0, bytes);
+#else
     void* p = MozTaggedAnonymousMmap(addr, bytes,
 #ifdef PROT_MPROTECT
                                      ProtectionSettingToFlags(protection) |
@@ -332,17 +347,25 @@ CommitPages(void* addr, size_t bytes, ProtectionSetting protection)
                                      MAP_FIXED | MAP_PRIVATE | MAP_ANON,
                                      -1, 0, "js-executable-memory");
     MOZ_RELEASE_ASSERT(addr == p);
+#endif
 }
 
 static void
 DecommitPages(void* addr, size_t bytes)
 {
+#if defined(__ppc__) || defined(__powerpc__)
+    // PPC Tiger: Use mprotect instead of mmap MAP_FIXED
+    fprintf(stderr, "PPC-DECOMMIT: addr=%p size=%zu\n", addr, bytes);
+    int rv = mprotect(addr, bytes, PROT_NONE);
+    MOZ_RELEASE_ASSERT(rv == 0);
+#else
     // Use mmap with MAP_FIXED and PROT_NONE. Inspired by jemalloc's
     // pages_decommit.
     void* p = MozTaggedAnonymousMmap(addr, bytes, PROT_NONE,
                                      MAP_FIXED | MAP_PRIVATE | MAP_ANON,
                                      -1, 0, "js-executable-memory");
     MOZ_RELEASE_ASSERT(addr == p);
+#endif
 }
 #endif
 
@@ -465,6 +488,7 @@ class ProcessExecutableMemory
             return false;
 
         base_ = static_cast<uint8_t*>(p);
+    fprintf(stderr, "PPC-JIT-POOL: base=%p size=0x%zx\n", base_, (size_t)MaxCodeBytesPerProcess); fflush(stderr);
 
         mozilla::Array<uint64_t, 2> seed;
         GenerateXoroshiro128PlusPlusSeed(seed);
@@ -562,6 +586,7 @@ ProcessExecutableMemory::allocate(size_t bytes, ProtectionSetting protection)
     }
 
     // Commit the pages after releasing the lock.
+    fprintf(stderr, "PPC-JIT-ALLOC: %p +0x%zx pages=%zu total=%zu\n", p, bytes, numPages, (size_t)pagesAllocated_); fflush(stderr);
     CommitPages(p, bytes, protection);
     return p;
 }

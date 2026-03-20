@@ -963,6 +963,10 @@ mips*-*)
     ENABLE_ION=1
     AC_DEFINE(JS_CPU_MIPS)
     ;;
+powerpc*-*)
+    ENABLE_ION=1
+    AC_DEFINE(JS_CPU_PPC)
+    ;;
 esac
 
 if test "$HAVE_64BIT_BUILD" ; then
@@ -1766,6 +1770,9 @@ elif test "$CPU_ARCH" = "mips" || test "$CPU_ARCH" = "mips32" || test "$CPU_ARCH
         AC_DEFINE(JS_CODEGEN_MIPS64)
         JS_CODEGEN_MIPS64=1
     fi
+elif test "$CPU_ARCH" = "powerpc" || test "$CPU_ARCH" = "ppc"; then
+    AC_DEFINE(JS_CODEGEN_PPC)
+    JS_CODEGEN_PPC=1
 fi
 
 AC_SUBST(JS_SIMULATOR)
@@ -1779,6 +1786,7 @@ AC_SUBST(JS_CODEGEN_MIPS32)
 AC_SUBST(JS_CODEGEN_MIPS64)
 AC_SUBST(JS_CODEGEN_X86)
 AC_SUBST(JS_CODEGEN_X64)
+AC_SUBST(JS_CODEGEN_PPC)
 AC_SUBST(JS_CODEGEN_NONE)
 AC_SUBST(JS_DISASM_ARM)
 

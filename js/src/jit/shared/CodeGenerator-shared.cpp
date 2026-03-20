@@ -145,6 +145,11 @@ CodeGeneratorShared::generateEpilogue()
     if (isProfilerInstrumentationEnabled())
         masm.profilerExitFrame();
 
+#ifdef JS_CODEGEN_PPC
+    // PPC ret() = blr() only — does NOT pop return address from stack.
+    // Ion prologue pushes return address via pushReturnAddress(), must pop before ret.
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     // On systems that use a constant pool, this is a good time to emit.
@@ -1591,7 +1596,23 @@ CodeGeneratorShared::jumpToBlock(MBasicBlock* mir)
 
         masm.propagateOOM(patchableBackedges_.append(PatchableBackedgeInfo(backedge, mir->lir()->label(), oolEntry)));
     } else {
+#ifdef JS_CODEGEN_PPC
+        {
+            Label* lbl = mir->lir()->label();
+            size_t off = masm.size();
+            bool isBound = lbl->bound();
+            masm.jump(lbl);
+            // Check if this emitted a b+0
+            const uint32_t* buf = (const uint32_t*)masm.buffer();
+            if (buf[off/4] == 0x48000000) {
+                fprintf(stderr, "PPC-B0-JUMP: b+0 at offset %zu, target block %u (bound=%d) from block %u\n",
+                        off, mir->id(), (int)isBound, current->mir()->id());
+                fflush(stderr);
+            }
+        }
+#else
         masm.jump(mir->lir()->label());
+#endif
     }
 }
 

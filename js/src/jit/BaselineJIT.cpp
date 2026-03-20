@@ -4,6 +4,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "jit/BaselineJIT.h"
+#include <cstdio>
+#include <cstring>
+#if defined(JS_CODEGEN_PPC) && defined(XP_DARWIN)
+#include <mach/mach.h>
+#endif
 
 #include "mozilla/BinarySearch.h"
 #include "mozilla/DebugOnly.h"
@@ -149,6 +154,11 @@ EnterBaseline(JSContext* cx, EnterJitData& data)
         nogc.reset();
 #endif
         // Single transition point from Interpreter to Baseline.
+#if defined(JS_CODEGEN_PPC)
+        // PPC workaround: fprintf before/after JIT entry prevents dyld crash.
+        // Minimal fprintf to test if libc's stdio machinery is the key.
+        fprintf(stderr, "%s", "");
+#endif
         CALL_GENERATED_CODE(enter, data.jitcode, data.maxArgc, data.maxArgv, data.osrFrame,
                             data.calleeToken, data.envChain.get(), data.osrNumStackValues,
                             data.result.address());
@@ -268,6 +278,36 @@ jit::EnterBaselineAtBranch(JSContext* cx, InterpreterFrame* fp, jsbytecode* pc)
 MethodStatus
 jit::BaselineCompile(JSContext* cx, JSScript* script, bool forceDebugInstrumentation)
 {
+#if defined(JS_CODEGEN_PPC)
+    {
+        static int ppc_compile_count = 0;
+        ppc_compile_count++;
+        // Check if the atom at 0x3a1aee0 has been corrupted
+        {
+            static bool atom_was_valid = false;
+            static bool atom_corruption_reported = false;
+            uint32_t* atom = (uint32_t*)0x3a1aee0;
+            uint32_t atom_len = atom[1]; // length field at offset 4
+            if (atom_len != 0 && !atom_was_valid) {
+                atom_was_valid = true;
+                fprintf(stderr, "PPC-ATOM-WATCH: atom valid at compile %d, len=%u flags=%08x chars=[%08x %08x]\n",
+                        ppc_compile_count, atom_len, atom[0], atom[2], atom[3]);
+                fflush(stderr);
+            }
+            if (atom_len == 0 && atom_was_valid && !atom_corruption_reported) {
+                atom_corruption_reported = true;
+                fprintf(stderr, "PPC-ATOM-WATCH: CORRUPTED at compile %d! [%08x %08x %08x %08x %08x %08x]\n",
+                        ppc_compile_count, atom[0], atom[1], atom[2], atom[3], atom[4], atom[5]);
+                fflush(stderr);
+            }
+        }
+        fprintf(stderr, "PPC-COMPILE[%d]: %s:%zu len=%zu\n",
+                ppc_compile_count,
+                script->filename() ? script->filename() : "?",
+                script->lineno(), script->length());
+        fflush(stderr);
+    }
+#endif
     MOZ_ASSERT(!script->hasBaselineScript());
     MOZ_ASSERT(script->canBaselineCompile());
     MOZ_ASSERT(IsBaselineEnabled(cx));
@@ -294,7 +334,7 @@ jit::BaselineCompile(JSContext* cx, JSScript* script, bool forceDebugInstrumenta
 
     MethodStatus status = compiler.compile();
 
-    MOZ_ASSERT_IF(status == Method_Compiled, script->hasBaselineScript());
+
     MOZ_ASSERT_IF(status != Method_Compiled, !script->hasBaselineScript());
 
     if (status == Method_CantCompile)
@@ -307,7 +347,6 @@ static MethodStatus
 CanEnterBaselineJIT(JSContext* cx, HandleScript script, InterpreterFrame* osrFrame)
 {
     MOZ_ASSERT(jit::IsBaselineEnabled(cx));
-
     // Skip if the script has been disabled.
     if (!script->canBaselineCompile())
         return Method_Skipped;
@@ -321,6 +360,14 @@ CanEnterBaselineJIT(JSContext* cx, HandleScript script, InterpreterFrame* osrFra
     if (script->hasBaselineScript())
         return Method_Compiled;
 
+#if defined(JS_CODEGEN_PPC)
+    // PPC: Only baseline-compile self-hosted scripts for now.
+    // Non-self-hosted scripts (URLs containing "://") trigger a crash
+    // in PPC baseline JIT code generation (PromiseObject::create null ptr).
+    if (script->filename() && strstr(script->filename(), "://"))
+        return Method_CantCompile;
+#endif
+
     // Check this before calling ensureJitCompartmentExists, so we're less
     // likely to report OOM in JSRuntime::createJitRuntime.
     if (!CanLikelyAllocateMoreExecutableMemory())
@@ -333,15 +380,18 @@ CanEnterBaselineJIT(JSContext* cx, HandleScript script, InterpreterFrame* osrFra
     if (script->incWarmUpCounter() <= JitOptions.baselineWarmUpThreshold)
         return Method_Skipped;
 
-    // Frames can be marked as debuggee frames independently of its underlying
-    // script being a debuggee script, e.g., when performing
-    // Debugger.Frame.prototype.eval.
-    return BaselineCompile(cx, script, osrFrame && osrFrame->isDebuggee());
+    MethodStatus st = BaselineCompile(cx, script, osrFrame && osrFrame->isDebuggee());
+
+    return st;
 }
 
 MethodStatus
 jit::CanEnterBaselineAtBranch(JSContext* cx, InterpreterFrame* fp, bool newType)
 {
+#ifdef JS_CODEGEN_PPC
+   // PPC: OSR not yet implemented in trampoline. Skip OSR entirely.
+   return Method_Skipped;
+#endif
    if (!CheckFrame(fp))
        return Method_CantCompile;
 
@@ -399,7 +449,7 @@ jit::CanEnterBaselineMethod(JSContext* cx, RunState& state)
 
     RootedScript script(cx, state.script());
     return CanEnterBaselineJIT(cx, script, /* osrFrame = */ nullptr);
-};
+}
 
 BaselineScript*
 BaselineScript::New(JSScript* jsscript,

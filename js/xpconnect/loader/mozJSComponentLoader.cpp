@@ -21,6 +21,7 @@
 #include "mozilla/Module.h"
 #include "nsIFile.h"
 #include "mozJSComponentLoader.h"
+#include <cstdio>
 #include "mozJSLoaderUtils.h"
 #include "nsIXPConnect.h"
 #include "nsIObserverService.h"
@@ -375,8 +376,10 @@ mozJSComponentLoader::LoadModule(FileLocation& aFile)
     rv = ObjectForLocation(info, file, &entry->obj, &entry->thisObjectKey,
                            &entry->location, false, &dummy);
     if (NS_FAILED(rv)) {
+    fprintf(stderr, "PPC-JSCL: LoadModule FAILED ObjectForLocation rv=0x%x spec=%s\n", (unsigned)rv, spec.get());
         return nullptr;
     }
+    fprintf(stderr, "PPC-JSCL: LoadModule OK spec=%s\n", spec.get());
 
     nsCOMPtr<nsIXPConnect> xpc = do_GetService(kXPConnectServiceContractID,
                                                &rv);
@@ -398,6 +401,7 @@ mozJSComponentLoader::LoadModule(FileLocation& aFile)
         NSGetFactory_val.isUndefined())
     {
         return nullptr;
+    fprintf(stderr, "PPC-JSCL: NO NSGetFactory in %s holder=%p\n", spec.get(), (void*)NSGetFactoryHolder.get());
     }
 
     if (JS_TypeOfValue(cx, NSGetFactory_val) != JSTYPE_FUNCTION) {
@@ -901,6 +905,7 @@ mozJSComponentLoader::ObjectForLocation(ComponentLoaderInfo& aInfo,
     }
 
     if (!script && !function) {
+    fprintf(stderr, "PPC-JSCL: COMPILE FAILED for %s\n", nativePath.get());
         return NS_ERROR_FAILURE;
     }
 
@@ -960,6 +965,37 @@ mozJSComponentLoader::ObjectForLocation(ComponentLoaderInfo& aInfo,
         }
 
         if (!ok) {
+    fprintf(stderr, "PPC-JSCL: EXECUTE FAILED for %s\n", nativePath.get());
+    // if (!JS_IsExceptionPending(aescx)) fprintf(stderr, "PPC-JSCL:   NO EXCEPTION PENDING\n");
+            if (JS_IsExceptionPending(aescx)) {
+                JS::RootedValue exc(aescx);
+                if (JS_GetPendingException(aescx, &exc)) {
+                    JS::RootedString excStr(aescx, JS::ToString(aescx, exc));
+                    if (excStr) {
+                        JS::UniqueChars excChars(JS_EncodeStringToUTF8(aescx, excStr));
+                        if (excChars) {
+    fprintf(stderr, "PPC-JSCL:   exception: %s\n", excChars.get());
+                        }
+                    }
+                    // Print exception details
+                    if (exc.isObject()) {
+                        JS::RootedObject excObj(aescx, &exc.toObject());
+                        JS::RootedValue mv(aescx), fv(aescx), lv(aescx);
+                        if (JS_GetProperty(aescx, excObj, "message", &mv) && mv.isString()) {
+                            JS::RootedString ms(aescx, mv.toString());
+                            JS::UniqueChars mc(JS_EncodeStringToUTF8(aescx, ms));
+    // if (mc) fprintf(stderr, "PPC-JSCL:   msg: %s\n", mc.get());
+                        }
+                        if (JS_GetProperty(aescx, excObj, "fileName", &fv) && fv.isString()) {
+                            JS::RootedString fs(aescx, fv.toString());
+                            JS::UniqueChars fc(JS_EncodeStringToUTF8(aescx, fs));
+                            JS_GetProperty(aescx, excObj, "lineNumber", &lv);
+    // if (fc) fprintf(stderr, "PPC-JSCL:   at: %s:%d\n", fc.get(), lv.isInt32() ? lv.toInt32() : -1);
+                        }
+                    }
+                    JS_ClearPendingException(aescx);
+                }
+            }
             if (aPropagateExceptions && aes.HasException()) {
                 // Ignore return value because we're returning an error code
                 // anyway.

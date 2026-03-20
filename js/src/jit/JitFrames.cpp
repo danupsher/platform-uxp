@@ -495,6 +495,11 @@ OnLeaveBaselineFrame(JSContext* cx, const JitFrameIterator& frame, jsbytecode* p
     BaselineFrame* baselineFrame = frame.baselineFrame();
     if (jit::DebugEpilogue(cx, baselineFrame, pc, frameOk)) {
         rfe->kind = ResumeFromException::RESUME_FORCED_RETURN;
+#if defined(JS_CODEGEN_PPC)
+    fprintf(stderr, "PPC-EXCEPTION: RESUME_FORCED_RETURN fp=%p sp=%p\n",
+            (void*)rfe->framePointer, (void*)rfe->stackPointer);
+    fflush(stderr);
+#endif
         rfe->framePointer = frame.fp() - BaselineFrame::FramePointerOffset;
         rfe->stackPointer = reinterpret_cast<uint8_t*>(baselineFrame);
     }
@@ -812,12 +817,20 @@ struct AutoResetLastProfilerFrameOnReturnFromException
 void
 HandleException(ResumeFromException* rfe)
 {
+#if defined(JS_CODEGEN_PPC)
+    fprintf(stderr, "PPC-EXCEPTION: HandleException called, kind=%d\n", rfe->kind);
+    fflush(stderr);
+#endif
     JSContext* cx = GetJSContextFromMainThread();
     TraceLoggerThread* logger = TraceLoggerForMainThread(cx->runtime());
 
     AutoResetLastProfilerFrameOnReturnFromException profFrameReset(cx, rfe);
 
     rfe->kind = ResumeFromException::RESUME_ENTRY_FRAME;
+#if defined(JS_CODEGEN_PPC)
+    fprintf(stderr, "PPC-EXCEPTION: RESUME_ENTRY_FRAME sp=%p\n", (void*)rfe->stackPointer);
+    fflush(stderr);
+#endif
 
     JitSpew(JitSpew_IonInvalidate, "handling exception");
 
@@ -845,6 +858,21 @@ HandleException(ResumeFromException* rfe)
     while (!iter.isEntry()) {
         bool overrecursed = false;
         if (iter.isIonJS()) {
+#ifdef JS_CODEGEN_PPC
+            // PPC safety: validate calleeToken before accessing Ion frame data.
+            // Bailout frame corruption can put JS values in JitFrameLayout.
+            {
+                JitFrameLayout* frame = iter.jsFrame();
+                uintptr_t ctVal = (uintptr_t)frame->calleeToken();
+                if (ctVal >= 0xFFFFFF80 || ctVal < 0x1000) {
+                    fprintf(stderr, "PPC-EXCEPTION: corrupted Ion frame ct=0x%x fp=%p, skipping\n",
+                            (unsigned)ctVal, (void*)frame);
+                    fflush(stderr);
+                    ++iter;
+                    continue;
+                }
+            }
+#endif
             // Search each inlined frame for live iterator objects, and close
             // them.
             InlineFrameIterator frames(cx, &iter);
@@ -1118,6 +1146,22 @@ MarkIonJSFrame(JSTracer* trc, const JitFrameIterator& frame)
 
     while (safepoint.getGcSlot(&entry)) {
         uintptr_t* ref = layout->slotRef(entry);
+#ifdef JS_CODEGEN_PPC
+        {
+            gc::Cell* cell = *reinterpret_cast<gc::Cell**>(ref);
+            if (cell) {
+                static int gcSlotCount = 0;
+                gcSlotCount++;
+                if (gcSlotCount <= 100) {
+                    fprintf(stderr, "PPC-GC-SLOT[%d]: cell=%08x ref=%p stk=%d slot=%u fp=%p ret=%p\n",
+                            gcSlotCount, (unsigned)(uintptr_t)cell, (void*)ref,
+                            entry.stack, entry.slot, (void*)layout,
+                            (void*)frame.returnAddressToFp());
+                    fflush(stderr);
+                }
+            }
+        }
+#endif
         TraceGenericPointerRoot(trc, reinterpret_cast<gc::Cell**>(ref), "ion-gc-slot");
     }
 
@@ -1131,8 +1175,24 @@ MarkIonJSFrame(JSTracer* trc, const JitFrameIterator& frame)
     LiveGeneralRegisterSet valueRegs = safepoint.valueSpills();
     for (GeneralRegisterBackwardIterator iter(safepoint.allGprSpills()); iter.more(); ++iter) {
         --spill;
-        if (gcRegs.has(*iter))
+        if (gcRegs.has(*iter)) {
+#ifdef JS_CODEGEN_PPC
+            {
+                gc::Cell* cell = *reinterpret_cast<gc::Cell**>(spill);
+                if (cell) {
+                    static int spillCount = 0;
+                    spillCount++;
+                    if (spillCount <= 100) {
+                        fprintf(stderr, "PPC-GC-SPILL[%d]: cell=%08x spill=%p fp=%p\n",
+                                spillCount, (unsigned)(uintptr_t)cell, (void*)spill,
+                                (void*)layout);
+                        fflush(stderr);
+                    }
+                }
+            }
+#endif
             TraceGenericPointerRoot(trc, reinterpret_cast<gc::Cell**>(spill), "ion-gc-spill");
+        }
         else if (valueRegs.has(*iter))
             TraceRoot(trc, reinterpret_cast<Value*>(spill), "ion-value-spill");
     }
@@ -1215,10 +1275,25 @@ UpdateIonJSFrameForMinorGC(JSTracer* trc, const JitFrameIterator& frame)
 
     LiveGeneralRegisterSet slotsRegs = safepoint.slotsOrElementsSpills();
     uintptr_t* spill = frame.spillBase();
+#ifdef JS_CODEGEN_PPC
+    fprintf(stderr, "PPC-GC-TRACE: UpdateIonJSFrame fp=%p spillBase=%p retAddr=%p ionScript=%p\n",
+            (void*)layout, (void*)spill, (void*)frame.returnAddressToFp(), (void*)ionScript);
+    fflush(stderr);
+#endif
     for (GeneralRegisterBackwardIterator iter(safepoint.allGprSpills()); iter.more(); ++iter) {
         --spill;
-        if (slotsRegs.has(*iter))
+        if (slotsRegs.has(*iter)) {
+#ifdef JS_CODEGEN_PPC
+            uintptr_t val = *spill;
+            if (val != 0 && val < 0x10000) {
+                fprintf(stderr, "PPC-GC-BAD: spill slots/elements ptr=%p val=0x%x (small int!)\n",
+                        (void*)spill, (unsigned)val);
+                fflush(stderr);
+                continue;
+            }
+#endif
             nursery.forwardBufferPointer(reinterpret_cast<HeapSlot**>(spill));
+        }
     }
 
     // Skip to the right place in the safepoint
@@ -1232,6 +1307,21 @@ UpdateIonJSFrameForMinorGC(JSTracer* trc, const JitFrameIterator& frame)
 
     while (safepoint.getSlotsOrElementsSlot(&entry)) {
         HeapSlot** slots = reinterpret_cast<HeapSlot**>(layout->slotRef(entry));
+#ifdef JS_CODEGEN_PPC
+        {
+            uintptr_t val = *reinterpret_cast<uintptr_t*>(slots);
+            if (val != 0 && val < 0x10000) {
+                fprintf(stderr, "PPC-GC-BAD: slots/elements ptr=%p val=0x%x (small int!)"
+                        " entry.stack=%u entry.slot=%u fp=%p retAddr=%p\n",
+                        (void*)slots, (unsigned)val,
+                        (unsigned)entry.stack, (unsigned)entry.slot,
+                        (void*)layout, (void*)frame.returnAddressToFp());
+                fflush(stderr);
+                // Skip this bad pointer instead of crashing
+                continue;
+            }
+        }
+#endif
         nursery.forwardBufferPointer(slots);
     }
 }
@@ -1259,7 +1349,7 @@ MarkIonAccessorICFrame(JSTracer* trc, const JitFrameIterator& frame)
     TraceRoot(trc, layout->stubCode(), "ion-ic-accessor-code");
 }
 
-#ifdef JS_CODEGEN_MIPS32
+#if defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_PPC)
 uint8_t*
 alignDoubleSpillWithOffset(uint8_t* pointer, int32_t offset)
 {
@@ -1880,7 +1970,17 @@ SnapshotIterator::allocationValue(const RValueAllocation& alloc, ReadMethod rm)
         return Float32Value(ReadFrameFloat32Slot(fp_, alloc.stackOffset()));
 
       case RValueAllocation::TYPED_REG:
+      {
+#ifdef JS_CODEGEN_PPC
+        uintptr_t payload = fromRegister(alloc.reg2());
+        if (alloc.knownType() == JSVAL_TYPE_OBJECT && payload < 0x10000 && payload != 0) {
+            fprintf(stderr, "PPC-SNAP: TYPED_REG type=%d payload=%08x(r%u)\n",
+                    (int)alloc.knownType(), (unsigned)payload, alloc.reg2().code());
+            fflush(stderr);
+        }
+#endif
         return FromTypedPayload(alloc.knownType(), fromRegister(alloc.reg2()));
+      }
 
       case RValueAllocation::TYPED_STACK:
       {
@@ -1907,8 +2007,16 @@ SnapshotIterator::allocationValue(const RValueAllocation& alloc, ReadMethod rm)
 #if defined(JS_NUNBOX32)
       case RValueAllocation::UNTYPED_REG_REG:
       {
+#ifdef JS_CODEGEN_PPC
+        {
+            uintptr_t tag = fromRegister(alloc.reg());
+            uintptr_t payload = fromRegister(alloc.reg2());
+            return Value::fromTagAndPayload(JSValueTag(tag), payload);
+        }
+#else
         return Value::fromTagAndPayload(JSValueTag(fromRegister(alloc.reg())),
                                         fromRegister(alloc.reg2()));
+#endif
       }
 
       case RValueAllocation::UNTYPED_REG_STACK:
@@ -2279,6 +2387,16 @@ JitFrameIterator::ionScript() const
     if (isBailoutJS())
         return activation_->bailoutData()->ionScript();
 
+#ifdef JS_CODEGEN_PPC
+    {
+        uintptr_t fp = reinterpret_cast<uintptr_t>(current_);
+        if (fp < 0x10000) {
+            fprintf(stderr, "PPC-BAD-FRAME: ionScript() current_=%p type=%u\n",
+                    (void*)current_, (unsigned)type_);
+            fflush(stderr);
+        }
+    }
+#endif
     IonScript* ionScript = nullptr;
     if (checkInvalidation(&ionScript))
         return ionScript;
@@ -2551,6 +2669,11 @@ MachineState::FromBailout(RegisterDump::GPRArray& regs, RegisterDump::FPUArray& 
         machine.setRegisterLocation(FloatRegister(i, FloatRegisters::Double), &fpregs[i]);
     }
 
+#elif defined(JS_CODEGEN_PPC)
+    for (unsigned i = 0; i < FloatRegisters::TotalPhys; i++) {
+        machine.setRegisterLocation(FloatRegister(i, FloatRegister::Single), &fpregs[i]);
+        machine.setRegisterLocation(FloatRegister(i, FloatRegister::Double), &fpregs[i]);
+    }
 #elif defined(JS_CODEGEN_NONE)
     MOZ_CRASH();
 #else

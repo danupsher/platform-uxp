@@ -902,6 +902,9 @@ set_define('_LIBCPP_INLINE_VISIBILITY_EXCEPT_GCC49', libcxx_inline_visibility)
 def visibility_flags(c_compiler, target, env):
     if target.os != 'WINNT':
         if target.kernel == 'Darwin':
+            # PPC cross-compile: skip visibility hidden (causes inline symbol issues)
+            if target.cpu == 'ppc':
+                return
             return ('-fvisibility=hidden', '-fvisibility-inlines-hidden')
         return ('-I%s/system_wrappers' % os.path.join(env.dist),
                 '-include',

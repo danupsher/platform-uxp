@@ -64,7 +64,7 @@ extern  "C" void sync_instruction_memory(caddr_t v, u_int len);
 #endif
 
 #if defined(__linux__) &&                                             \
-     (defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)) &&    \
+     (defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)) &&    \
      (!defined(JS_SIMULATOR_MIPS32) && !defined(JS_SIMULATOR_MIPS64))
 #include <sys/cachectl.h>
 #endif
@@ -288,6 +288,23 @@ class ExecutableAllocator
     static void cacheFlush(void* code, size_t size)
     {
 	__clear_cache(code, (void *)((size_t)code + size));
+    }
+#elif defined(JS_CODEGEN_PPC)
+    static void cacheFlush(void* code, size_t size)
+    {
+        // PPC970 (G5): 128-byte cache lines. dcbst pushes D-cache to L2,
+        // icbi invalidates I-cache line. sync+isync serializes.
+        uintptr_t start = reinterpret_cast<uintptr_t>(code) & ~127u;
+        uintptr_t end = (reinterpret_cast<uintptr_t>(code) + size + 127) & ~127u;
+        for (uintptr_t addr = start; addr < end; addr += 128) {
+            __asm__ volatile("dcbst 0, %0" :: "r"(addr) : "memory");
+        }
+        __asm__ volatile("sync" ::: "memory");
+        for (uintptr_t addr = start; addr < end; addr += 128) {
+            __asm__ volatile("icbi 0, %0" :: "r"(addr) : "memory");
+        }
+        __asm__ volatile("sync" ::: "memory");
+        __asm__ volatile("isync" ::: "memory");
     }
 #elif JS_CPU_SPARC
     static void cacheFlush(void* code, size_t size)

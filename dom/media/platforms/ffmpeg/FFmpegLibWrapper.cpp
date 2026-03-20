@@ -179,7 +179,7 @@ FFmpegLibWrapper::Unlink()
   }
   if (mAVCodecLib) {
   #ifdef XP_DARWIN
-    dlclose(mAVUtilLib);
+    dlclose(mAVCodecLib);
   #else
     PR_UnloadLibrary(mAVCodecLib);
   #endif

@@ -106,9 +106,22 @@ LIRGeneratorShared::visitConstant(MConstant* ins)
       case MIRType::Object:
         define(new(alloc()) LPointer(&ins->toObject()), ins);
         break;
+      case MIRType::Undefined:
+      case MIRType::Null:
+        // These types have no payload — they are fully described by their tag.
+        // Use INT32 type with value 0 as a dummy register definition.
+        // The actual undefined/null semantics come from the type tag when boxed.
+        define(new(alloc()) LInteger(0), ins, LDefinition(LDefinition::INT32, LDefinition::REGISTER));
+        break;
+      case MIRType::MagicOptimizedArguments:
+      case MIRType::MagicOptimizedOut:
+      case MIRType::MagicHole:
+      case MIRType::MagicIsConstructing:
+      case MIRType::MagicUninitializedLexical:
+        // Magic types — same treatment as undefined/null.
+        define(new(alloc()) LInteger(0), ins, LDefinition(LDefinition::INT32, LDefinition::REGISTER));
+        break;
       default:
-        // Constants of special types (undefined, null) should never flow into
-        // here directly. Operations blindly consuming them require a Box.
         MOZ_CRASH("unexpected constant type");
     }
 }

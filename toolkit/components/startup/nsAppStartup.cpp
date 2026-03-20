@@ -1,4 +1,5 @@
 /* -*- Mode: C++; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
+#include <cstdio>
 /* This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
@@ -272,16 +273,20 @@ nsAppStartup::Run(void)
   // quit, don't bother running the event loop which would probably leave us
   // with a zombie process.
 
+  fprintf(stderr, "PPC-STARTUP: Run() mShuttingDown=%d mConsiderQuitStopper=%d\n", mShuttingDown, mConsiderQuitStopper);
   if (!mShuttingDown && mConsiderQuitStopper != 0) {
 #ifdef XP_MACOSX
     EnterLastWindowClosingSurvivalArea();
 #endif
 
     mRunning = true;
-
+    fprintf(stderr, "PPC-STARTUP: entering mAppShell->Run()\n");
     nsresult rv = mAppShell->Run();
+    fprintf(stderr, "PPC-STARTUP: mAppShell->Run() returned rv=%d\n", (int)rv);
     if (NS_FAILED(rv))
       return rv;
+  } else {
+    fprintf(stderr, "PPC-STARTUP: SKIPPING event loop!\n");
   }
 
   nsresult retval = NS_OK;

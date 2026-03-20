@@ -224,3 +224,20 @@ void ff_vlc_free(VLC *vlc);
     } while (0)
 
 #endif /* AVCODEC_VLC_H */
+
+/* Backward compatibility for H.264 decoder from ffmpeg 6.0.1 */
+#ifndef INIT_VLC_USE_NEW_STATIC
+#define INIT_VLC_USE_NEW_STATIC 4
+#define INIT_VLC_STATIC_OVERLONG (1 | INIT_VLC_USE_NEW_STATIC)
+#define ff_init_vlc_sparse ff_vlc_init_sparse
+static inline int init_vlc(VLC *vlc, int nb_bits, int nb_codes,
+                           const void *bits, int bits_wrap, int bits_size,
+                           const void *codes, int codes_wrap, int codes_size,
+                           int flags)
+{
+    return ff_vlc_init_sparse(vlc, nb_bits, nb_codes,
+                              bits, bits_wrap, bits_size,
+                              codes, codes_wrap, codes_size,
+                              NULL, 0, 0, flags);
+}
+#endif

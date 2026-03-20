@@ -2238,6 +2238,19 @@ GetPropertyIC::update(JSContext* cx, HandleScript outerScript, size_t cacheIndex
                       HandleObject obj, HandleValue idval, MutableHandleValue vp)
 {
     IonScript* ion = outerScript->ionScript();
+#ifdef JS_CODEGEN_PPC
+    {
+        uintptr_t objAddr = (uintptr_t)obj.get();
+        uintptr_t grp = (objAddr >= 0x10000 && objAddr < 0xF0000000) ? *(uintptr_t*)objAddr : 0;
+        if (objAddr < 0x10000 || objAddr > 0xF0000000 || grp < 0x10000 || grp > 0xF0000000) {
+            fprintf(stderr, "PPC-GETPROP-BAD: obj=%08x grp=%08x idx=%u\n",
+                    (unsigned)objAddr, (unsigned)grp, (unsigned)cacheIndex);
+            fflush(stderr);
+            vp.setUndefined();
+            return true;
+        }
+    }
+#endif
 
     GetPropertyIC& cache = ion->getCache(cacheIndex).toGetProperty();
 
@@ -3715,6 +3728,25 @@ SetPropertyIC::update(JSContext* cx, HandleScript outerScript, size_t cacheIndex
                       HandleValue idval, HandleValue value)
 {
     IonScript* ion = outerScript->ionScript();
+#ifdef JS_CODEGEN_PPC
+    {
+        uintptr_t objAddr = (uintptr_t)obj.get();
+        uintptr_t grp = (objAddr >= 0x10000 && objAddr < 0xF0000000) ? *(uintptr_t*)objAddr : 0;
+        if (objAddr < 0x10000 || objAddr > 0xF0000000 || grp < 0x10000 || grp > 0xF0000000) {
+            uintptr_t* w = (objAddr >= 0x10000 && objAddr < 0xF0000000) ? (uintptr_t*)objAddr : nullptr;
+            fprintf(stderr, "PPC-SETPROP-BAD: obj=%08x grp=%08x idx=%u handle=%08x\n",
+                    (unsigned)objAddr, (unsigned)grp, (unsigned)cacheIndex,
+                    (unsigned)(uintptr_t)obj.address());
+            if (w) {
+                fprintf(stderr, "  words: %08x %08x %08x %08x %08x %08x %08x %08x\n",
+                        (unsigned)w[0], (unsigned)w[1], (unsigned)w[2], (unsigned)w[3],
+                        (unsigned)w[4], (unsigned)w[5], (unsigned)w[6], (unsigned)w[7]);
+            }
+            fflush(stderr);
+            return true;
+        }
+    }
+#endif
     SetPropertyIC& cache = ion->getCache(cacheIndex).toSetProperty();
 
     // Remember the old group and shape if we may attach an add-property stub.

@@ -1441,6 +1441,11 @@ MacroAssembler::generateBailoutTail(Register scratch, Register bailoutInfo)
 
 #if defined(JS_CODEGEN_X86) || defined(JS_CODEGEN_X64)
             push(ICTailCallReg);
+#elif defined(JS_CODEGEN_PPC)
+            // PPC: IC stubs return via blr (branch to link register).
+            // ICTailCallReg is r0, not LR, so we must move resumeAddr into LR
+            // before jumping to the monitor stub.
+            as_mtlr(ICTailCallReg);
 #endif
             jump(Address(ICStubReg, ICStub::offsetOfStubCode()));
         }
@@ -1889,8 +1894,12 @@ MacroAssembler::outOfLineTruncateSlow(FloatRegister src, Register dest, bool wid
         push(srcSingle);
         convertFloat32ToDouble(srcSingle, src);
     }
+#elif defined(JS_CODEGEN_PPC)
+    if (widenFloatToDouble) {
+        convertFloat32ToDouble(src, ScratchDoubleReg);
+        src = ScratchDoubleReg;
+    }
 #else
-    // Also see below
     MOZ_CRASH("MacroAssembler platform hook: outOfLineTruncateSlow");
 #endif
 
@@ -1910,6 +1919,8 @@ MacroAssembler::outOfLineTruncateSlow(FloatRegister src, Register dest, bool wid
 #elif defined(JS_CODEGEN_X86) || defined(JS_CODEGEN_X64)
     if (widenFloatToDouble)
         pop(srcSingle);
+#elif defined(JS_CODEGEN_PPC)
+    // Nothing - PPC used ScratchDoubleReg, no cleanup needed
 #else
     MOZ_CRASH("MacroAssembler platform hook: outOfLineTruncateSlow");
 #endif

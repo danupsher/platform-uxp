@@ -17,6 +17,8 @@
 # include "jit/arm64/Architecture-arm64.h"
 #elif defined(JS_CODEGEN_MIPS32)
 # include "jit/mips32/Architecture-mips32.h"
+#elif defined(JS_CODEGEN_PPC)
+# include "jit/ppc/Architecture-ppc.h"
 #elif defined(JS_CODEGEN_MIPS64)
 # include "jit/mips64/Architecture-mips64.h"
 #elif defined(JS_CODEGEN_NONE)
@@ -99,8 +101,13 @@ struct Register {
 };
 
 #if defined(JS_NUNBOX32)
+# if MOZ_BIG_ENDIAN
+static const uint32_t INT64LOW_OFFSET = 1 * sizeof(int32_t);
+static const uint32_t INT64HIGH_OFFSET = 0 * sizeof(int32_t);
+# else
 static const uint32_t INT64LOW_OFFSET = 0 * sizeof(int32_t);
 static const uint32_t INT64HIGH_OFFSET = 1 * sizeof(int32_t);
+# endif
 #endif
 
 struct Register64
@@ -166,8 +173,18 @@ class RegisterDump
 // if the GC pointers mapped by this structure are relocated.
 class MachineState
 {
+#ifdef JS_CODEGEN_PPC
+    // PPC FIX: volatile POINTERS prevent GCC from optimizing away stores
+    // to these arrays. Without volatile, GCC drops stores during struct
+    // copy and member init, causing stale pointers that crash bailouts.
+    // NOTE: volatile goes AFTER the * to make the pointer itself volatile,
+    // not the pointed-to data.
+    Registers::RegisterContent* volatile regs_[Registers::Total];
+    FloatRegisters::RegisterContent* volatile fpregs_[FloatRegisters::Total];
+#else
     mozilla::Array<Registers::RegisterContent*, Registers::Total> regs_;
     mozilla::Array<FloatRegisters::RegisterContent*, FloatRegisters::Total> fpregs_;
+#endif
 
   public:
     MachineState() {

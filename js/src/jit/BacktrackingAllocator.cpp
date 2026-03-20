@@ -827,9 +827,17 @@ BacktrackingAllocator::go()
     JitSpew(JitSpew_RegAlloc, "Beginning main allocation loop");
 
     // Allocate, spill and split bundles until finished.
+#ifdef JS_CODEGEN_PPC
+    uint32_t regalloc_iters = 0;
+#endif
     while (!allocationQueue.empty()) {
         if (mir->shouldCancel("Backtracking Allocation"))
             return false;
+#ifdef JS_CODEGEN_PPC
+        if (++regalloc_iters > 10000) {
+            return false;
+        }
+#endif
 
         QueueItem item = allocationQueue.removeHighest();
         if (!processBundle(mir, item.bundle))

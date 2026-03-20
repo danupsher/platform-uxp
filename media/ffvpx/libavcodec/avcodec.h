@@ -2160,6 +2160,12 @@ typedef struct AVHWAccel {
      * see AV_HWACCEL_CODEC_CAP_*
      */
     int capabilities;
+    /* H.264 decoder compat fields (Tiger PPC - hwaccel always NULL at runtime) */
+    int (*start_frame)(AVCodecContext *avctx, const uint8_t *buf, uint32_t buf_size);
+    int (*decode_params)(AVCodecContext *avctx, int type, const uint8_t *buf, uint32_t buf_size);
+    int (*decode_slice)(AVCodecContext *avctx, const uint8_t *buf, uint32_t buf_size);
+    int (*end_frame)(AVCodecContext *avctx);
+    int frame_priv_data_size;
 } AVHWAccel;
 
 /**

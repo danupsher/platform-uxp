@@ -618,6 +618,14 @@ JS::InitSelfHostedCode(JSContext* cx)
     if (!cx->cycleDetectorSet.init())
         return false;
 
+    // PPC: Enable baseline JIT, disable Ion/asm.js (not yet implemented).
+    // Must be done before initSelfHosting, which evaluates JS and can
+    // trigger baseline compilation with default-enabled options.
+    JS::ContextOptionsRef(cx).setBaseline(true)
+                             .setIon(false)
+                             .setAsmJS(false)
+                             .setNativeRegExp(false);
+
     if (!rt->initSelfHosting(cx))
         return false;
 

@@ -5,6 +5,7 @@
 
 #include "jit/BaselineCompiler.h"
 
+
 #include "mozilla/Casting.h"
 #include "mozilla/SizePrintfMacros.h"
 
@@ -224,10 +225,6 @@ BaselineCompiler::compile()
     JitSpew(JitSpew_BaselineScripts, "Created BaselineScript %p (raw %p) for %s:%" PRIuSIZE,
             (void*) baselineScript.get(), (void*) code->raw(),
             script->filename(), script->lineno());
-
-#ifdef JS_ION_PERF
-    writePerfSpewerBaselineProfile(script, code);
-#endif
 
     MOZ_ASSERT(pcMappingIndexEntries.length() > 0);
     baselineScript->copyPCMappingIndexEntries(&pcMappingIndexEntries[0]);
@@ -458,6 +455,16 @@ BaselineCompiler::emitEpilogue()
     masm.pop(BaselineFrameReg);
 
     emitProfilerExitFrame();
+
+#ifdef JS_USE_LINK_REGISTER
+    // On architectures with a link register (PPC, ARM, MIPS), the prologue
+    // pushed the return address. Pop it back before returning.
+    // On MIPS, ret() itself pops ra, but on PPC ret() only does blr.
+    // Use popReturnAddress() which handles the arch-specific restore.
+#ifdef JS_CODEGEN_PPC
+    masm.popReturnAddress();
+#endif
+#endif
 
     masm.ret();
     return true;
@@ -2272,6 +2279,7 @@ BaselineCompiler::emit_JSOP_INITPROP()
 {
     // Keep lhs in R0, rhs in R1.
     frame.popRegsAndSync(2);
+
 
     // Push the object to store the result of the IC.
     frame.push(R0);

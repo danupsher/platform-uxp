@@ -21,12 +21,14 @@ elif CONFIG['CPU_ARCH'].startswith('loongarch64'):
 SharedLibrary('mozavcodec')
 SOURCES += [
     'allcodecs.c',
+    'atsc_a53.c',
     'avcodec.c',
     'avfft.c',
     'avpacket.c',
     'bitstream.c',
     'bitstream_filters.c',
     'bsf.c',
+    'cabac.c',
     'codec_desc.c',
     'codec_par.c',
     'decode.c',
@@ -38,10 +40,37 @@ SOURCES += [
     'flacdsp.c',
     'get_buffer.c',
     'golomb.c',
+    'h2645_parse.c',
+    'h2645_sei.c',
+    'h2645_vui.c',
+    'h2645data.c',
+    'h264_cabac.c',
+    'h264_cavlc.c',
+    'h264_direct.c',
+    'h264_levels.c',
+    'h264_loopfilter.c',
+    'h264_mb.c',
+    'h264_mp4toannexb.c',
+    'h264_parse.c',
+    'h264_parser.c',
+    'h264_picture.c',
+    'h264_ps.c',
+    'h264_refs.c',
+    'h264_sei.c',
+    'h264_slice.c',
+    'h264chroma.c',
+    'h264data.c',
+    'h264dec.c',
+    'h264dsp.c',
+    'h264idct.c',
     'h264pred.c',
+    'h264qpel.c',
+    'h274.c',
+    'hpeldsp.c',
     'imgconvert.c',
     'log2_tab.c',
     'mathtables.c',
+    'mpegutils.c',
     'null_bsf.c',
     'options.c',
     'parser.c',
@@ -54,6 +83,7 @@ SOURCES += [
     'raw.c',
     'refstruct.c',
     'reverse.c',
+    'startcode.c',
     'utils.c',
     'version.c',
     'videodsp.c',
@@ -77,7 +107,7 @@ SOURCES += [
     'vp9prob.c',
     'vp9recon.c',
     'vpx_rac.c',
-    'xiph.c'
+    'xiph.c',
 ]
 
 # When building debug, there's a linker symbol inclusion issue, requiring us to
@@ -94,7 +124,7 @@ NO_VISIBILITY_FLAGS = True
 if CONFIG['GNU_CXX']:
   CXXFLAGS += ['-Wno-attributes']
 
-# GCC 10 defaults -fno-common, we don't care to solve this "properly" yet
+# GCC 10 defaults -fno-common, we don't care to solve this properly yet
 # so use GCC < 10 behavior.
 if CONFIG['GNU_CC'] and CONFIG['CC_VERSION'] >= '10.0.0':
     CFLAGS += ['-fcommon']

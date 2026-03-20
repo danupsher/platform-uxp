@@ -38,7 +38,7 @@
 static const char* gProgname = "huh?";
 
 // Note: some tests manipulate this value.
-unsigned int _gdb_sleep_duration = 300;
+unsigned int _gdb_sleep_duration = 0;
 
 #if defined(LINUX) && defined(DEBUG) && \
       (defined(__i386) || defined(__x86_64) || defined(PPC))
@@ -81,6 +81,9 @@ static void PrintStackFrame(uint32_t aFrameNumber, void *aPC, void *aSP,
 void
 ah_crap_handler(int signum)
 {
+  fprintf(stderr, "PPC-CRASH: signal %d pid=%d\n", signum, getpid());
+  FILE* f = fopen("/tmp/machfox_crash.log", "a");
+  if (f) { fprintf(f, "signal=%d pid=%d\n", signum, getpid()); fclose(f); }
   printf("\nProgram %s (pid = %d) received signal %d.\n",
          gProgname,
          getpid(),

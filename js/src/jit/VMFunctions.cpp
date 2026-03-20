@@ -508,8 +508,10 @@ bool
 OperatorIn(JSContext* cx, HandleValue key, HandleObject obj, bool* out)
 {
     RootedId id(cx);
-    return ToPropertyKey(cx, key, &id) &&
-           HasProperty(cx, obj, id, out);
+    bool ok = ToPropertyKey(cx, key, &id) &&
+              HasProperty(cx, obj, id, out);
+
+    return ok;
 }
 
 bool
@@ -1133,6 +1135,11 @@ bool
 SetDenseOrUnboxedArrayElement(JSContext* cx, HandleObject obj, int32_t index,
                               HandleValue value, bool strict)
 {
+#ifdef JS_CODEGEN_PPC
+    fprintf(stderr, "ION-DIAG SetDenseOrUnboxed: index=%d tag=0x%x payload=0x%x isObj=%d isUndef=%d isNull=%d\n",
+            index, (unsigned)value.get().toNunboxTag(), (unsigned)value.get().toNunboxPayload(),
+            value.isObject() ? 1 : 0, value.isUndefined() ? 1 : 0, value.isNull() ? 1 : 0);
+#endif
     // This function is called from Ion code for StoreElementHole's OOL path.
     // In this case we know the object is native or an unboxed array and that
     // no type changes are needed.

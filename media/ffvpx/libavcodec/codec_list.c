@@ -1,4 +1,7 @@
 static const FFCodec * const codec_list[] = {
+#if CONFIG_H264_DECODER
+    &ff_h264_decoder,
+#endif
 #if CONFIG_VP8_DECODER
     &ff_vp8_decoder,
 #endif

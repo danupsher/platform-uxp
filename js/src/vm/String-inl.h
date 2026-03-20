@@ -6,6 +6,9 @@
 #ifndef vm_String_inl_h
 #define vm_String_inl_h
 
+#if defined(JS_CODEGEN_PPC)
+#include <cstdio>
+#endif
 #include "vm/String.h"
 
 #include "mozilla/PodOperations.h"
@@ -137,6 +140,27 @@ JSDependentString::init(js::ExclusiveContext* cx, JSLinearString* base, size_t s
                         size_t length)
 {
     MOZ_ASSERT(start + length <= base->length());
+#if defined(JS_CODEGEN_PPC)
+    if (length > 0x00FFFFFF) {
+        fprintf(stderr, "PPC-DEPSTR-INIT: BAD length=%zu start=%zu base=%p base->len=%zu this=%p\n",
+                length, start, (void*)base, base->length(), (void*)this);
+        uint32_t* braw = (uint32_t*)(void*)base;
+        fprintf(stderr, "PPC-DEPSTR-BASE: [%08x %08x %08x %08x %08x %08x]\n",
+                braw[0], braw[1], braw[2], braw[3], braw[4], braw[5]);
+        fflush(stderr);
+        // Fix: clamp length to 0 to prevent crash
+        d.u1.length = 0;
+        if (base->hasLatin1Chars()) {
+            d.u1.flags = DEPENDENT_FLAGS | LATIN1_CHARS_BIT;
+            d.s.u2.nonInlineCharsLatin1 = base->latin1Chars(JS::AutoCheckCannotGC()) + start;
+        } else {
+            d.u1.flags = DEPENDENT_FLAGS;
+            d.s.u2.nonInlineCharsTwoByte = base->twoByteChars(JS::AutoCheckCannotGC()) + start;
+        }
+        d.s.u3.base = base;
+        return;
+    }
+#endif
     d.u1.length = length;
     JS::AutoCheckCannotGC nogc;
     if (base->hasLatin1Chars()) {

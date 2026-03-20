@@ -540,7 +540,7 @@ class LDefinition
         return !isFloatReg() && !r.isFloat();
     }
     bool isCompatibleDef(const LDefinition& other) const {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_MIPS32)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_PPC)
         if (isFloatReg() && other.isFloatReg())
             return type() == other.type();
         return !isFloatReg() && !other.isFloatReg();
@@ -1927,6 +1927,8 @@ LAllocation::toRegister() const
 #  include "jit/mips64/LIR-mips64.h"
 # endif
 # include "jit/mips-shared/LIR-mips-shared.h"
+#elif defined(JS_CODEGEN_PPC)
+# include "jit/ppc/LIR-ppc.h"
 #elif defined(JS_CODEGEN_NONE)
 # include "jit/none/LIR-none.h"
 #else

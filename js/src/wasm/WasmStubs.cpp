@@ -1049,6 +1049,8 @@ wasm::GenerateInterruptExit(MacroAssembler& masm, Label* throwLabel)
     masm.ret();
 #elif defined(JS_CODEGEN_ARM64)
     MOZ_CRASH();
+#elif defined(JS_CODEGEN_PPC)
+    MOZ_CRASH("PPC: NYI wasm stub");
 #elif defined (JS_CODEGEN_NONE)
     MOZ_CRASH();
 #else

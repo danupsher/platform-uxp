@@ -1524,6 +1524,10 @@ JitCompartment::generateRegExpMatcherStub(JSContext* cx)
 
     MacroAssembler masm(cx);
 
+#ifdef JS_USE_LINK_REGISTER
+    masm.pushReturnAddress();
+#endif
+
     // The InputOutputData is placed above the return address on the stack.
     size_t inputOutputDataStartOffset = sizeof(void*);
 
@@ -1682,10 +1686,16 @@ JitCompartment::generateRegExpMatcherStub(JSContext* cx)
 
     // All done!
     masm.tagValue(JSVAL_TYPE_OBJECT, object, result);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     masm.bind(&notFound);
     masm.moveValue(NullValue(), result);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     // Fallback paths for CreateDependentString and createGCObject.
@@ -1711,6 +1721,9 @@ JitCompartment::generateRegExpMatcherStub(JSContext* cx)
     // Use an undefined value to signal to the caller that the OOL stub needs to be called.
     masm.bind(&oolEntry);
     masm.moveValue(UndefinedValue(), result);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     Linker linker(masm);
@@ -1839,6 +1852,10 @@ JitCompartment::generateRegExpSearcherStub(JSContext* cx)
 
     MacroAssembler masm(cx);
 
+#ifdef JS_USE_LINK_REGISTER
+    masm.pushReturnAddress();
+#endif
+
     // The InputOutputData is placed above the return address on the stack.
     size_t inputOutputDataStartOffset = sizeof(void*);
 
@@ -1860,14 +1877,23 @@ JitCompartment::generateRegExpSearcherStub(JSContext* cx)
     masm.load32(stringLimitAddress, input);
     masm.lshiftPtr(Imm32(15), input);
     masm.or32(input, result);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     masm.bind(&notFound);
     masm.move32(Imm32(RegExpSearcherResultNotFound), result);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     masm.bind(&oolEntry);
     masm.move32(Imm32(RegExpSearcherResultFailed), result);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     Linker linker(masm);
@@ -2016,6 +2042,9 @@ JitCompartment::generateRegExpTesterStub(JSContext* cx)
 
     masm.bind(&done);
     masm.freeStack(sizeof(irregexp::InputOutputData));
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     Linker linker(masm);
@@ -2947,6 +2976,8 @@ CodeGenerator::visitMoveGroup(LMoveGroup* group)
 {
     if (!group->numMoves())
         return;
+
+
 
     MoveResolver& resolver = masm.moveResolver();
 
@@ -4155,11 +4186,12 @@ CodeGenerator::emitCallInvokeFunctionShuffleNewTarget(LCallKnown* call, Register
 void
 CodeGenerator::visitCallKnown(LCallKnown* call)
 {
-    Register calleereg = ToRegister(call->getFunction());
     Register objreg    = ToRegister(call->getTempObject());
     uint32_t unusedStack = StackOffsetOfPassedArg(call->argslot());
     WrappedFunction* target = call->getSingleTarget();
     Label end, uncompiled;
+
+    Register calleereg = ToRegister(call->getFunction());
 
     // Native single targets are handled by LCallNative.
     MOZ_ASSERT(!target->isNative());
@@ -4709,9 +4741,14 @@ CodeGenerator::generateArgumentsChecks(bool bailout)
         masm.guardTypeSet(Address(masm.getStackPointer(), offset), types, BarrierKind::TypeSet, temp, &miss);
     }
 
+
     if (miss.used()) {
         if (bailout) {
+            // Jump over the bailout code on the success path
+            Label success;
+            masm.jump(&success);
             bailoutFrom(&miss, graph.entrySnapshot());
+            masm.bind(&success);
         } else {
             Label success;
             masm.jump(&success);
@@ -5234,7 +5271,6 @@ CodeGenerator::generateBody()
 #endif
 
         masm.bind(current->label());
-
         mozilla::Maybe<ScriptCountBlockState> blockCounts;
         if (counts) {
             blockCounts.emplace(&counts->block(i), &masm);
@@ -5284,7 +5320,27 @@ CodeGenerator::generateBody()
             emitDebugForceBailing(*iter);
 #endif
 
+#ifdef JS_CODEGEN_PPC
+            size_t beforeOff = masm.size();
+#endif
             iter->accept(this);
+#ifdef JS_CODEGEN_PPC
+            {
+                size_t afterOff = masm.size();
+                if (afterOff > beforeOff && gen->info().script()) {
+                    const uint32_t* buf = (const uint32_t*)masm.buffer();
+                    for (size_t bi = beforeOff/4; bi < afterOff/4; bi++) {
+                        if (buf[bi] == 0x48000000) {
+                            fprintf(stderr, "PPC-B0-TRACE: b+0 at offset %zu emitted by %s in %s:%u\n",
+                                    bi*4, iter->opName(),
+                                    gen->info().script()->filename() ? gen->info().script()->filename() : "?",
+                                    (unsigned)gen->info().script()->lineno());
+                            fflush(stderr);
+                        }
+                    }
+                }
+            }
+#endif
 
             // Track the end native offset of optimizations.
             if (iter->mirRaw() && iter->mirRaw()->trackedOptimizations())
@@ -7335,6 +7391,9 @@ ConcatInlineString(MacroAssembler& masm, Register lhs, Register rhs, Register ou
             masm.store8(Imm32(0), Address(temp2, 0));
     }
 
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 }
 
@@ -7355,6 +7414,19 @@ CodeGenerator::visitSubstr(LSubstr* lir)
     // On x86 there are not enough registers. In that case reuse the string
     // register as temporary.
     Register temp2 = lir->temp2()->isBogusTemp() ? string : ToRegister(lir->temp2());
+
+#if defined(JS_CODEGEN_PPC)
+    {
+        static int substrCount = 0;
+        if (substrCount < 3) {
+            fprintf(stderr, "PPC-VISITSUBSTR[%d]: string=r%d begin=r%d length=r%d output=r%d temp=r%d temp2=r%d temp3=r%d\n",
+                    substrCount, string.code(), begin.code(), length.code(),
+                    output.code(), temp.code(), temp2.code(), temp3.code());
+            fflush(stderr);
+            substrCount++;
+        }
+    }
+#endif
 
     Address stringFlags(string, JSString::offsetOfFlags());
 
@@ -7519,14 +7591,23 @@ JitCompartment::generateStringConcatStub(JSContext* cx)
     // Store left and right nodes.
     masm.storePtr(lhs, Address(output, JSRope::offsetOfLeft()));
     masm.storePtr(rhs, Address(output, JSRope::offsetOfRight()));
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     masm.bind(&leftEmpty);
     masm.mov(rhs, output);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     masm.bind(&rightEmpty);
     masm.mov(lhs, output);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     masm.bind(&isFatInlineTwoByte);
@@ -7543,6 +7624,9 @@ JitCompartment::generateStringConcatStub(JSContext* cx)
 
     masm.bind(&failure);
     masm.movePtr(ImmPtr(nullptr), output);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     Linker linker(masm);
@@ -7584,6 +7668,9 @@ JitRuntime::generateMallocStub(JSContext* cx)
     masm.storeCallPointerResult(regReturn);
 
     masm.PopRegsInMask(save);
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     Linker linker(masm);
@@ -7620,6 +7707,9 @@ JitRuntime::generateFreeStub(JSContext* cx)
 
     masm.PopRegsInMask(save);
 
+#ifdef JS_USE_LINK_REGISTER
+    masm.popReturnAddress();
+#endif
     masm.ret();
 
     Linker linker(masm);
@@ -8424,12 +8514,40 @@ CodeGenerator::visitOutOfLineStoreElementHole(OutOfLineStoreElementHole* ool)
 
     RegisterOrInt32Constant key = ToRegisterOrInt32Constant(index);
 
+#ifdef JS_CODEGEN_PPC
+    {
+        const char* insType = "unknown";
+        if (ins->isStoreElementHoleV()) insType = "HoleV";
+        else if (ins->isStoreElementHoleT()) insType = "HoleT";
+        else if (ins->isFallibleStoreElementV()) insType = "FallV";
+        else if (ins->isFallibleStoreElementT()) insType = "FallT";
+        fprintf(stderr, "ION-DIAG StoreElement%s: obj=r%d elements=r%d valueType=%d",
+                insType, object.code(), elements.code(), (int)valueType);
+        if (value.constant()) {
+            fprintf(stderr, " value=CONST");
+        } else {
+            TypedOrValueRegister tvr = value.reg();
+            if (tvr.hasValue()) {
+                ValueOperand vo = tvr.valueReg();
+                fprintf(stderr, " value.type=r%d value.payload=r%d", vo.typeReg().code(), vo.payloadReg().code());
+            } else {
+                fprintf(stderr, " value.typed=r%d mirtype=%d", tvr.typedReg().gpr().code(), (int)tvr.type());
+            }
+        }
+        if (key.isRegister())
+            fprintf(stderr, " key=r%d", key.reg().code());
+        else
+            fprintf(stderr, " key=const(%d)", key.constant());
+        fprintf(stderr, "\n");
+    }
+#endif
+
     // If index == initializedLength, try to bump the initialized length inline.
     // If index > initializedLength, call a stub. Note that this relies on the
     // condition flags sticking from the incoming branch.
     Label callStub;
-#if defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
-    // Had to reimplement for MIPS because there are no flags.
+#if defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
+    // Had to reimplement for MIPS/PPC because there are no flags.
     if (unboxedType == JSVAL_TYPE_MAGIC) {
         Address initLength(elements, ObjectElements::offsetOfInitializedLength());
         masm.branch32(Assembler::NotEqual, initLength, key, &callStub);
@@ -9393,6 +9511,7 @@ CodeGenerator::generate()
         return false;
 
     generateInvalidateEpilogue();
+
 #if defined(JS_ION_PERF)
     // Note the end of the inline code and start of the OOL code.
     perfSpewer_.noteEndInlineCode(masm);
@@ -9545,9 +9664,50 @@ CodeGenerator::link(JSContext* cx, CompilerConstraintList* constraints)
     // read barriers which were skipped while compiling the script off thread.
     Linker linker(masm);
     AutoFlushICache afc("IonLink");
+#ifdef JS_CODEGEN_PPC
+    // Scan for b+0 (unbound labels). After trivial-blocks fix, should be NONE.
+    // Safety: if any remain, patch to failure handler to avoid infinite loop.
+    {
+        uint32_t* code = (uint32_t*)masm.buffer();
+        size_t nInsts = masm.size() / 4;
+        Label* failLabel = masm.failureLabel();
+        for (size_t i = 0; i < nInsts; i++) {
+            if (code[i] == 0x48000000) {
+                fprintf(stderr, "PPC-B0-BUG: unpatched b+0 at offset %zu in %s:%u\n",
+                        i * 4, script->filename() ? script->filename() : "?",
+                        (unsigned)script->lineno());
+                fflush(stderr);
+                // Dump surrounding context
+                size_t start = (i >= 20) ? i - 20 : 0;
+                size_t end = (i + 5 < nInsts) ? i + 5 : nInsts;
+                for (size_t k = start; k < end; k++) {
+                    fprintf(stderr, "  [%zu] %08x%s\n", k*4, code[k],
+                            (k == i) ? " <-- b+0" : "");
+                }
+                fflush(stderr);
+                if (failLabel->bound()) {
+                    int32_t disp = failLabel->offset() - (int32_t)(i * 4);
+                    code[i] = 0x48000000 | (disp & 0x03fffffc);
+                }
+            }
+        }
+    }
+#endif
     JitCode* code = linker.newCode<CanGC>(cx, ION_CODE, !patchableBackedges_.empty());
     if (!code)
         return false;
+
+#ifdef JS_CODEGEN_PPC
+    // Diagnostic: print Ion code address range for all functions
+    {
+        fprintf(stderr, "ION-CODE: %s:%u code=%p-%p size=%u\n",
+                script->filename() ? script->filename() : "?",
+                (unsigned)script->lineno(),
+                code->raw(), code->rawEnd(),
+                (unsigned)(code->rawEnd() - code->raw()));
+        fflush(stderr);
+    }
+#endif
 
     // Encode native to bytecode map if profiling is enabled.
     if (isProfilerInstrumentationEnabled()) {

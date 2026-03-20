@@ -20,6 +20,9 @@
 #include "mozilla/Services.h"
 
 #include "nsAppRunner.h"
+
+
+
 #include "mozilla/AppData.h"
 #ifdef MOZ_UPDATER
 #include "nsUpdateDriver.h"
@@ -2884,6 +2887,7 @@ XREMain::XRE_mainInit(bool* aExitFlag)
   SetupMacApplicationDelegate();
 
   if (EnvHasValue("MOZ_LAUNCHED_CHILD")) {
+
     // This is needed, on relaunch, to force the OS to use the "Cocoa Dock
     // API".  Otherwise the call to ReceiveNextEvent() below will make it
     // use the "Carbon Dock API".  For more info see bmo bug 377166.
@@ -3749,19 +3753,24 @@ XREMain::XRE_mainRun()
 
     nsCOMPtr<nsIObserverService> obsService =
       mozilla::services::GetObserverService();
-    if (obsService)
-      obsService->NotifyObservers(nullptr, "final-ui-startup", nullptr);
+    if (obsService) {
+        obsService->NotifyObservers(nullptr, "final-ui-startup", nullptr);
+      }
 
     (void)appStartup->DoneStartingUp();
-
+    fprintf(stderr, "PPC-STARTUP: DoneStartingUp, checking shutdown\n");
     appStartup->GetShuttingDown(&mShuttingDown);
+    fprintf(stderr, "PPC-STARTUP: shuttingDown=%d\n", mShuttingDown);
   }
 
   if (!mShuttingDown) {
+    fprintf(stderr, "PPC-STARTUP: calling cmdLine->Run()\n");
     rv = cmdLine->Run();
+    fprintf(stderr, "PPC-STARTUP: cmdLine->Run() rv=%d\n", (int)rv);
     NS_ENSURE_SUCCESS_LOG(rv, NS_ERROR_FAILURE);
 
     appStartup->GetShuttingDown(&mShuttingDown);
+    fprintf(stderr, "PPC-STARTUP: after cmdLine, shuttingDown=%d\n", mShuttingDown);
   }
 
   if (!mShuttingDown) {
@@ -3789,7 +3798,9 @@ XREMain::XRE_mainRun()
 #endif /* MOZ_INSTRUMENT_EVENT_LOOP */
 
   {
+    fprintf(stderr, "PPC-STARTUP: entering main event loop\n");
     rv = appStartup->Run();
+    fprintf(stderr, "PPC-STARTUP: main loop returned rv=%d\n", (int)rv);
     if (NS_FAILED(rv)) {
       NS_ERROR("failed to run appstartup");
       gLogConsoleErrors = true;

@@ -9,6 +9,9 @@
 #include "nsIFile.h"
 #include "prmem.h"
 #include "prlink.h"
+#ifdef XP_DARWIN
+#include <dlfcn.h>
+#endif
 
 // We use a known symbol located in lgpllibs to determine its location.
 // soundtouch happens to be always included in lgpllibs
@@ -28,6 +31,21 @@ static FFmpegLibWrapper sFFVPXLib;
 FFVPXRuntimeLinker::LinkStatus FFVPXRuntimeLinker::sLinkStatus =
   LinkStatus_INIT;
 
+#ifdef XP_DARWIN
+// On Darwin, FFmpegLibWrapper uses dlsym() to resolve symbols, so we must
+// use dlopen() directly to get a handle compatible with dlsym(). Using
+// PR_LoadLibraryWithFlags would return a PRLibrary* struct pointer, which
+// is not a valid dlopen handle and causes dlsym to fail.
+static void*
+MozAVLink(const char* aName)
+{
+  void* lib = dlopen(aName, RTLD_NOW | RTLD_LOCAL);
+  if (!lib) {
+    FFMPEG_LOG("unable to load library %s: %s", aName, dlerror());
+  }
+  return lib;
+}
+#else
 static PRLibrary*
 MozAVLink(const char* aName)
 {
@@ -40,6 +58,7 @@ MozAVLink(const char* aName)
   }
   return lib;
 }
+#endif
 
 /* static */ bool
 FFVPXRuntimeLinker::Init()

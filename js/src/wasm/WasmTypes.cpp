@@ -399,6 +399,8 @@ GetCPUID()
 #elif defined(JS_CODEGEN_MIPS64)
     MOZ_ASSERT(jit::GetMIPSFlags() <= (UINT32_MAX >> ARCH_BITS));
     return MIPS64 | (jit::GetMIPSFlags() << ARCH_BITS);
+#elif defined(JS_CODEGEN_PPC)
+    return 0;
 #elif defined(JS_CODEGEN_NONE)
     return 0;
 #else

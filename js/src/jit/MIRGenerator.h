@@ -18,6 +18,7 @@
 
 #include "jit/CompileInfo.h"
 #include "jit/JitAllocPolicy.h"
+#include "jit/JitSpewer.h"
 #include "jit/JitCompartment.h"
 #include "jit/MIR.h"
 #ifdef JS_ION_PERF

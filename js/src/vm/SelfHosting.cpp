@@ -652,6 +652,7 @@ intrinsic_DefineDataProperty(JSContext* cx, unsigned argc, Value* vp)
     MOZ_ASSERT(args.length() >= 3);
     MOZ_ASSERT(args[0].isObject());
 
+
     RootedObject obj(cx, &args[0].toObject());
     RootedId id(cx);
     if (!ValueToId<CanGC>(cx, args[1], &id))
@@ -687,6 +688,7 @@ intrinsic_DefineDataProperty(JSContext* cx, unsigned argc, Value* vp)
     desc.setDataDescriptor(value, attrs);
     if (!DefineProperty(cx, obj, id, desc))
         return false;
+
 
     args.rval().setUndefined();
     return true;

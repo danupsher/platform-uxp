@@ -2124,15 +2124,23 @@ IonBuilder::inlineDefineDataProperty(CallInfo& callInfo)
     MOZ_ASSERT(!callInfo.constructing());
 
     // Only handle definitions of plain data properties.
-    if (callInfo.argc() != 3)
+    if (callInfo.argc() != 3) {
+#ifdef JS_CODEGEN_PPC
+        fprintf(stderr, "ION-DDP: NotInlined (argc=%d)\n", callInfo.argc());
+#endif
         return InliningStatus_NotInlined;
+    }
 
     MDefinition* obj = convertUnboxedObjects(callInfo.getArg(0));
     MDefinition* id = callInfo.getArg(1);
     MDefinition* value = callInfo.getArg(2);
 
-    if (ElementAccessHasExtraIndexedProperty(this, obj))
+    if (ElementAccessHasExtraIndexedProperty(this, obj)) {
+#ifdef JS_CODEGEN_PPC
+        fprintf(stderr, "ION-DDP: NotInlined (extraIndexedProperty)\n");
+#endif
         return InliningStatus_NotInlined;
+    }
 
     // setElemTryDense will push the value as the result of the define instead
     // of |undefined|, but this is fine if the rval is ignored (as it should be
@@ -2142,9 +2150,16 @@ IonBuilder::inlineDefineDataProperty(CallInfo& callInfo)
     bool emitted = false;
     if (!setElemTryDense(&emitted, obj, id, value, /* writeHole = */ true))
         return InliningStatus_Error;
-    if (!emitted)
+    if (!emitted) {
+#ifdef JS_CODEGEN_PPC
+        fprintf(stderr, "ION-DDP: NotInlined (setElemTryDense not emitted), value type=%d\n", (int)value->type());
+#endif
         return InliningStatus_NotInlined;
+    }
 
+#ifdef JS_CODEGEN_PPC
+    fprintf(stderr, "ION-DDP: INLINED value type=%d obj type=%d\n", (int)value->type(), (int)obj->type());
+#endif
     callInfo.setImplicitlyUsedUnchecked();
     return InliningStatus_Inlined;
 }

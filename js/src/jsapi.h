@@ -984,13 +984,13 @@ namespace JS {
 class JS_PUBLIC_API(ContextOptions) {
   public:
     ContextOptions()
-      : baseline_(true),
-        ion_(true),
-        asmJS_(true),
+      : baseline_(false),
+        ion_(false),
+        asmJS_(false),
         wasm_(false),
         wasmAlwaysBaseline_(false),
         throwOnAsmJSValidationFailure_(false),
-        nativeRegExp_(true),
+        nativeRegExp_(false),
         unboxedArrays_(false),
         asyncStack_(true),
         throwOnDebuggeeWouldRun_(true),

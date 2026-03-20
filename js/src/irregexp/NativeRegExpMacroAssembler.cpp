@@ -31,6 +31,7 @@
 
 #include "irregexp/RegExpStack.h"
 #include "jit/Linker.h"
+#include "jit/JitSpewer.h"
 #ifdef JS_ION_PERF
 # include "jit/PerfSpewer.h"
 #endif
@@ -72,13 +73,40 @@ NativeRegExpMacroAssembler::NativeRegExpMacroAssembler(LifoAlloc* alloc, JSRunti
     // Find physical registers for each compiler register.
     AllocatableGeneralRegisterSet regs(GeneralRegisterSet::All());
 
-    temp0 = regs.takeAny();
-    temp1 = regs.takeAny();
-    temp2 = regs.takeAny();
+    // On PPC, use volatile regs for temps (truly temporary, clobbered freely)
+    // but non-volatile regs for state that must persist across the entire
+    // regexp execution. Volatile regs (r3-r12) can be clobbered by internal
+    // MacroAssembler operations or ABI calls.
+    temp0 = regs.takeAny();  // r3 (volatile - ok for temp)
+    temp1 = regs.takeAny();  // r4 (volatile - ok for temp)
+    temp2 = regs.takeAny();  // r5 (volatile - ok for temp)
+#if defined(JS_CODEGEN_PPC)
+    // Skip remaining volatile registers to reach non-volatile ones (r14+)
+    // Allocatable volatile regs after r3-r5: r6, r7, r8, r9, r10
+    // (r0 is non-allocatable, r11/r12 are scratch)
+    regs.take(Register::FromCode(js::jit::Registers::r6));
+    regs.take(Register::FromCode(js::jit::Registers::r7));
+    regs.take(Register::FromCode(js::jit::Registers::r8));
+    regs.take(Register::FromCode(js::jit::Registers::r9));
+    regs.take(Register::FromCode(js::jit::Registers::r10));
+    // Now takeAny() will give non-volatile registers (r14, r15, r16, r17...)
+#endif
     input_end_pointer = regs.takeAny();
     current_character = regs.takeAny();
     current_position = regs.takeAny();
     backtrack_stack_pointer = regs.takeAny();
+
+#if defined(JS_CODEGEN_PPC)
+    // Our state registers (input_end_pointer, current_character,
+    // current_position, backtrack_stack_pointer) are now non-volatile (r14+)
+    // but were removed from regs, so SavedNonVolatileRegisters won't include
+    // them. We need to manually add them back so they're saved/restored
+    // in the prologue/epilogue to preserve the caller's values.
+    regs.add(input_end_pointer);
+    regs.add(current_character);
+    regs.add(current_position);
+    regs.add(backtrack_stack_pointer);
+#endif
 
     JitSpew(JitSpew_Codegen,
             "Starting RegExp (input_end_pointer %s) (current_character %s)"
@@ -426,6 +454,15 @@ NativeRegExpMacroAssembler::GenerateCode(JSContext* cx, bool match_only)
         volatileRegs.add(Register::FromCode(Registers::lr));
 #elif defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
         volatileRegs.add(Register::FromCode(Registers::ra));
+#elif defined(JS_CODEGEN_PPC)
+        // On PPC, also save/restore the non-volatile state registers.
+        // Even though C functions preserve non-volatile regs, the
+        // setupUnalignedABICall + callWithABI sequence may clobber
+        // registers through the MoveEmitter or stack alignment.
+        volatileRegs.addUnchecked(input_end_pointer);
+        volatileRegs.addUnchecked(current_character);
+        volatileRegs.addUnchecked(current_position);
+        volatileRegs.addUnchecked(backtrack_stack_pointer);
 #endif
         volatileRegs.takeUnchecked(temp0);
         volatileRegs.takeUnchecked(temp1);
@@ -1083,6 +1120,12 @@ NativeRegExpMacroAssembler::CheckBacktrackStackLimit()
     masm.branchPtr(Assembler::AboveOrEqual, AbsoluteAddress(limitAddr),
                    backtrack_stack_pointer, &no_stack_overflow);
 
+#if defined(JS_CODEGEN_PPC)
+    // PPC: Bail to interpreted regexp if stack overflows.
+    // The GrowBacktrackStack handler has a register corruption bug.
+    // With 64KB initial stack, this rarely triggers.
+    masm.jump(&exit_with_exception_label_);
+#else
     // Copy the stack pointer before the call() instruction modifies it.
     masm.moveStackPtrTo(temp2);
 
@@ -1090,6 +1133,7 @@ NativeRegExpMacroAssembler::CheckBacktrackStackLimit()
 
     // Exit with an exception if the call failed.
     masm.branchTest32(Assembler::Zero, temp0, temp0, &exit_with_exception_label_);
+#endif
 
     masm.bind(&no_stack_overflow);
 }
@@ -1366,6 +1410,11 @@ NativeRegExpMacroAssembler::CanReadUnaligned()
 #if defined(JS_CODEGEN_ARM)
     return !jit::HasAlignmentFault();
 #elif defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
+    return false;
+#elif defined(JS_CODEGEN_PPC)
+    // PPC is big-endian: multi-byte loads produce bytes in opposite order
+    // from what the regexp compiler expects (it builds comparison constants
+    // assuming little-endian: c1 | (c2 << 8)). Must use single-char loads.
     return false;
 #else
     return true;

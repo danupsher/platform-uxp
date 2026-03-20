@@ -1217,6 +1217,7 @@ RegExpShared::execute(JSContext* cx, MutableHandleRegExpShared re, HandleLinearS
         if (!code)
             break;
 
+
         RegExpRunStatus result;
         {
             AutoTraceLog logJIT(logger, TraceLogger_IrregexpExecute);

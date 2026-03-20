@@ -5828,15 +5828,15 @@ IonBuilder::selectInliningTargets(const ObjectVector& targets, CallInfo& callInf
     uint32_t totalSize = 0;
 
     // For each target, ask whether it may be inlined.
-    if (!choiceSet.reserve(targets.length()))
+    if (!choiceSet.reserve((unsigned)targets.length()))
         return false;
 
     // Don't inline polymorphic sites during the definite properties analysis.
     // AddClearDefiniteFunctionUsesInScript depends on this for correctness.
-    if (info().analysisMode() == Analysis_DefiniteProperties && targets.length() > 1)
+    if (info().analysisMode() == Analysis_DefiniteProperties && (unsigned)targets.length() > 1)
         return true;
 
-    for (size_t i = 0; i < targets.length(); i++) {
+    for (size_t i = 0; i < (unsigned)targets.length(); i++) {
         JSObject* target = targets[i];
 
         trackOptimizationAttempt(TrackedStrategy::Call_Inline);
@@ -5880,7 +5880,7 @@ IonBuilder::selectInliningTargets(const ObjectVector& targets, CallInfo& callInf
     // is a native, track the type info of the call. Most native inlinings
     // depend on the types of the arguments and the return value.
     if (isOptimizationTrackingEnabled()) {
-        for (size_t i = 0; i < targets.length(); i++) {
+        for (size_t i = 0; i < (unsigned)targets.length(); i++) {
             if (choiceSet[i] && targets[i]->as<JSFunction>().isNative()) {
                 trackTypeInfo(callInfo);
                 break;
@@ -5888,7 +5888,7 @@ IonBuilder::selectInliningTargets(const ObjectVector& targets, CallInfo& callInf
         }
     }
 
-    MOZ_ASSERT(choiceSet.length() == targets.length());
+    MOZ_ASSERT(choiceSet.length() == (unsigned)targets.length());
     return true;
 }
 
@@ -6046,7 +6046,7 @@ IonBuilder::inlineCallsite(const ObjectVector& targets, CallInfo& callInfo)
 
     // Inline single targets -- unless they derive from a cache, in which case
     // avoiding the cache and guarding is still faster.
-    if (!propCache.get() && targets.length() == 1) {
+    if (!propCache.get() && (unsigned)targets.length() == 1) {
         JSObject* target = targets[0];
 
         trackOptimizationAttempt(TrackedStrategy::Call_Inline);
@@ -6226,9 +6226,9 @@ IonBuilder::inlineCalls(CallInfo& callInfo, const ObjectVector& targets, BoolVec
 {
     // Only handle polymorphic inlining.
     MOZ_ASSERT(IsIonInlinablePC(pc));
-    MOZ_ASSERT(choiceSet.length() == targets.length());
-    MOZ_ASSERT_IF(!maybeCache, targets.length() >= 2);
-    MOZ_ASSERT_IF(maybeCache, targets.length() >= 1);
+    MOZ_ASSERT(choiceSet.length() == (unsigned)targets.length());
+    MOZ_ASSERT_IF(!maybeCache, (unsigned)targets.length() >= 2);
+    MOZ_ASSERT_IF(maybeCache, (unsigned)targets.length() >= 1);
 
     MBasicBlock* dispatchBlock = current;
     callInfo.setImplicitlyUsedUnchecked();
@@ -6275,7 +6275,7 @@ IonBuilder::inlineCalls(CallInfo& callInfo, const ObjectVector& targets, BoolVec
     // Reserve the capacity for the phi.
     // Note: this is an upperbound. Unreachable targets and uninlineable natives are also counted.
     uint32_t count = 1; // Possible fallback block.
-    for (uint32_t i = 0; i < targets.length(); i++) {
+    for (uint32_t i = 0; i < (unsigned)targets.length(); i++) {
         if (choiceSet[i])
             count++;
     }
@@ -6283,7 +6283,7 @@ IonBuilder::inlineCalls(CallInfo& callInfo, const ObjectVector& targets, BoolVec
         return false;
 
     // Inline each of the inlineable targets.
-    for (uint32_t i = 0; i < targets.length(); i++) {
+    for (uint32_t i = 0; i < (unsigned)targets.length(); i++) {
         // Target must be inlineable.
         if (!choiceSet[i])
             continue;
@@ -6424,7 +6424,7 @@ IonBuilder::inlineCalls(CallInfo& callInfo, const ObjectVector& targets, BoolVec
             }
         }
     } else {
-        useFallback = dispatch->numCases() < targets.length();
+        useFallback = dispatch->numCases() < (unsigned)targets.length();
     }
 
     // If necessary, generate a fallback path.
@@ -6444,8 +6444,8 @@ IonBuilder::inlineCalls(CallInfo& callInfo, const ObjectVector& targets, BoolVec
 
             // If there is only 1 remaining case, we can annotate the fallback call
             // with the target information.
-            if (dispatch->numCases() + 1 == targets.length()) {
-                for (uint32_t i = 0; i < targets.length(); i++) {
+            if (dispatch->numCases() + 1 == (unsigned)targets.length()) {
+                for (uint32_t i = 0; i < (unsigned)targets.length(); i++) {
                     if (choiceSet[i])
                         continue;
 
@@ -7053,6 +7053,25 @@ IonBuilder::jsop_call(uint32_t argc, bool constructing, bool ignoresReturnValue)
         return false;
 
     // Try inlining
+#ifdef JS_CODEGEN_PPC
+    {
+        static int ionCallCount = 0;
+        ionCallCount++;
+        // Log info about self-hosted function calls
+        if (info().script()->selfHosted() && info().script()->lineno() >= 360 && info().script()->lineno() <= 390) {
+            fprintf(stderr, "ION-CALL[%d]: sh:%u argc=%u targets=%u calleeTypes=%p calleeDepth=%d\n",
+                    ionCallCount, (unsigned)info().script()->lineno(), (unsigned)argc, (unsigned)targets.length(),
+                    (void*)calleeTypes, calleeDepth);
+            MDefinition* callee = current->peek(calleeDepth);
+            fprintf(stderr, "  callee: isConst=%d type=%d hasTypeSet=%d\n",
+                    callee->isConstant() ? 1 : 0, (int)callee->type(),
+                    callee->resultTypeSet() ? 1 : 0);
+            if (callee->resultTypeSet()) {
+                fprintf(stderr, "  typeSet: objCount=%u\n", callee->resultTypeSet()->getObjectCount());
+            }
+        }
+    }
+#endif
     InliningStatus status = inlineCallsite(targets, callInfo);
     if (status == InliningStatus_Inlined)
         return true;
@@ -7064,7 +7083,7 @@ IonBuilder::jsop_call(uint32_t argc, bool constructing, bool ignoresReturnValue)
 
     // No inline, just make the call.
     JSFunction* target = nullptr;
-    if (targets.length() == 1 && targets[0]->is<JSFunction>())
+    if ((unsigned)targets.length() == 1 && targets[0]->is<JSFunction>())
         target = &targets[0]->as<JSFunction>();
 
     if (target && status == InliningStatus_WarmUpCountTooLow) {
@@ -10818,7 +10837,10 @@ IonBuilder::jsop_setelem_dense(TemporaryTypeSet::DoubleConversion conversion,
         MStoreElementHole* ins = MStoreElementHole::New(alloc(), obj, elements, id, newValue, unboxedType);
         store = ins;
         common = ins;
-
+#ifdef JS_CODEGEN_PPC
+        fprintf(stderr, "ION-SELEM: MStoreElementHole created, newValue type=%d elementType=%d\n",
+                (int)newValue->type(), (int)elementType);
+#endif
         current->add(ins);
         current->push(value);
     } else if (mayBeFrozen) {
@@ -14155,12 +14177,19 @@ IonBuilder::jsop_in()
     if (!inTryFold(&emitted, obj, id) || emitted)
         return emitted;
 
+#ifdef JS_CODEGEN_PPC
+    // MIn VM call has broken Value argument passing on PPC big-endian.
+    // CONFIRMED: SIGSEGV addr=0xffffff82 (tag used as pointer) when enabled.
+    // Need to fix pushArg(ToValue) argument order for this specific call path.
+    abortReason_ = AbortReason_Disable; return abort("MIn VM call not supported on PPC");
+#else
     MIn* ins = MIn::New(alloc(), id, obj);
 
     current->add(ins);
     current->push(ins);
 
     return resumeAfter(ins);
+#endif
 }
 
 bool
@@ -14184,6 +14213,7 @@ IonBuilder::inTryDense(bool* emitted, MDefinition* obj, MDefinition* id)
 
     bool needsHoleCheck = !ElementAccessIsPacked(constraints(), obj);
 
+
     // Ensure id is an integer.
     MInstruction* idInt32 = MToInt32::New(alloc(), id);
     current->add(idInt32);
@@ -14201,6 +14231,19 @@ IonBuilder::inTryDense(bool* emitted, MDefinition* obj, MDefinition* id)
         pushConstant(BooleanValue(true));
         return true;
     }
+
+#ifdef JS_CODEGEN_PPC
+    {
+        JSScript* sc = script();
+        const char* fn = sc ? sc->filename() : "?";
+        if (fn && strcmp(fn, "self-hosted") == 0) {
+            fprintf(stderr, "ION-INTRY-INARRAY: %s:%u needsHole=%d failedBC=%d\n",
+                    fn, (unsigned)(sc ? sc->lineno() : 0),
+                    needsHoleCheck, failedBoundsCheck_);
+            fflush(stderr);
+        }
+    }
+#endif
 
     // Check if id < initLength and elem[id] not a hole.
     MInArray* ins = MInArray::New(alloc(), elements, id, initLength, obj, needsHoleCheck,

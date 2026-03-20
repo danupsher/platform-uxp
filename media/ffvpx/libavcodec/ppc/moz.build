@@ -4,9 +4,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 SOURCES += [
+    'h264chroma_init.c',
+    'h264dsp.c',
+    'h264qpel.c',
     'hpeldsp_altivec.c',
     'videodsp.c',
-    'vp8dsp_altivec.c'
+    'vp8dsp_altivec.c',
 ]
 
 FINAL_LIBRARY = 'mozavcodec'

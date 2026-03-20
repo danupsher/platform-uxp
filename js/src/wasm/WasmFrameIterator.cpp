@@ -242,6 +242,14 @@ static const unsigned PushedRetAddr = 8;
 static const unsigned PushedFP = 32;
 static const unsigned StoredFP = 36;
 static const unsigned PostStorePrePopFP = 4;
+#elif defined(JS_CODEGEN_PPC)
+// PPC: LR-based return, similar to MIPS
+# if defined(DEBUG)
+static const unsigned PushedRetAddr = 0;
+static const unsigned PostStorePrePopFP = 0;
+# endif
+static const unsigned PushedFP = 1;
+static const unsigned StoredFP = 1;
 #elif defined(JS_CODEGEN_NONE)
 # if defined(DEBUG)
 static const unsigned PushedRetAddr = 0;
@@ -826,6 +834,9 @@ wasm::ToggleProfiling(const Code& code, const CallSite& callSite, bool enabled)
     BOffImm16 calleeOffset;
     callerInsn->extractImm16(&calleeOffset);
     void* callee = calleeOffset.getDest(reinterpret_cast<Instruction*>(caller));
+#elif defined(JS_CODEGEN_PPC)
+    MOZ_CRASH("PPC: NYI ToggleProfiling callee extraction");
+    void* callee = nullptr;
 #elif defined(JS_CODEGEN_NONE)
     MOZ_CRASH();
     void* callee = nullptr;
@@ -853,6 +864,8 @@ wasm::ToggleProfiling(const Code& code, const CallSite& callSite, bool enabled)
     MOZ_CRASH();
 #elif defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
     new (caller) InstImm(op_regimm, zero, rt_bgezal, BOffImm16(to - caller));
+#elif defined(JS_CODEGEN_PPC)
+    MOZ_CRASH("PPC: NYI ToggleProfiling patch");
 #elif defined(JS_CODEGEN_NONE)
     MOZ_CRASH();
 #else

@@ -51,6 +51,20 @@ Linker::newCode(JSContext* cx, CodeKind kind, bool hasPatchableBackedges /* = fa
     awjc.emplace(result, bytesNeeded);
     code->copyFrom(masm);
     masm.link(code);
+#ifdef JS_CODEGEN_PPC
+    {
+        const char* kindStr = "?";
+        switch (kind) {
+            case ION_CODE: kindStr = "ION"; break;
+            case BASELINE_CODE: kindStr = "BASE"; break;
+            case OTHER_CODE: kindStr = "OTHER"; break;
+        }
+        fprintf(stderr, "JIT-ALLOC: %s code=%p-%p size=%u\n",
+                kindStr, code->raw(), code->rawEnd(),
+                (unsigned)(code->rawEnd() - code->raw()));
+        fflush(stderr);
+    }
+#endif
     if (masm.embedsNurseryPointers())
         cx->runtime()->gc.storeBuffer.putWholeCell(code);
     return code;

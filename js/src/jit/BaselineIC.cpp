@@ -5,6 +5,7 @@
 
 #include "jit/BaselineIC.h"
 
+
 #include "mozilla/DebugOnly.h"
 #include "mozilla/SizePrintfMacros.h"
 #include "mozilla/TemplateLib.h"
@@ -27,6 +28,7 @@
 #endif
 #include "jit/SharedICHelpers.h"
 #include "jit/VMFunctions.h"
+
 #include "js/Conversions.h"
 #include "js/GCVector.h"
 #include "vm/Opcodes.h"
@@ -2702,6 +2704,7 @@ ICSetElem_Fallback::Compiler::generateStubCode(MacroAssembler& masm)
     masm.push(R0.scratchReg());
 
     masm.push(ICStubReg);
+
     pushStubPayload(masm, R0.scratchReg());
 
     return tailCallVM(DoSetElemFallbackInfo, masm);

@@ -37,7 +37,7 @@ function ArrayIndexOf(searchElement/*, fromIndex*/) {
     /* Step 9. */
     if (IsPackedArray(O)) {
         for (; k < len; k++) {
-            if (O[k] === searchElement)
+            if (k in O && O[k] === searchElement)
                 return k;
         }
     } else {
@@ -85,7 +85,7 @@ function ArrayLastIndexOf(searchElement/*, fromIndex*/) {
     /* Step 8. */
     if (IsPackedArray(O)) {
         for (; k >= 0; k--) {
-            if (O[k] === searchElement)
+            if (k in O && O[k] === searchElement)
                 return k;
         }
     } else {

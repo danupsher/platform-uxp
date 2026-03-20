@@ -116,6 +116,13 @@ class InvalidationBailoutStack;
 class BailoutFrameInfo
 {
     MachineState machine_;
+#ifdef JS_CODEGEN_PPC
+    // PPC FIX: Local copies of register values so MachineState pointers
+    // point to our own storage, not into the bailout stack which can get
+    // overwritten by callee frames on PPC Darwin ABI.
+    RegisterDump::GPRArray savedRegs_;
+    RegisterDump::FPUArray savedFpregs_;
+#endif
     uint8_t* framePointer_;
     size_t topFrameSize_;
     IonScript* topIonScript_;

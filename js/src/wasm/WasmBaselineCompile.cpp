@@ -119,6 +119,7 @@
 #include "wasm/WasmBinaryIterator.h"
 #include "wasm/WasmGenerator.h"
 #include "wasm/WasmSignalHandlers.h"
+#include "jit/JitSpewer.h"
 
 #include "jit/MacroAssembler-inl.h"
 

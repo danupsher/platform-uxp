@@ -15,9 +15,9 @@
 #include "jit/RegisterSets.h"
 #include "vm/HelperThreads.h"
 #include "wasm/WasmTypes.h"
-
 #if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || \
-    defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
+    defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || \
+    defined(JS_CODEGEN_PPC)
 // Push return addresses callee-side.
 # define JS_USE_LINK_REGISTER
 #endif

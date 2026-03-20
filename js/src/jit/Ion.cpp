@@ -522,6 +522,8 @@ LinkCodeGen(JSContext* cx, IonBuilder* builder, CodeGenerator *codegen)
     if (!codegen->link(cx, builder->constraints()))
         return false;
 
+
+
     return true;
 }
 
@@ -567,6 +569,7 @@ jit::LinkIonScript(JSContext* cx, HandleScript calleeScript)
             // not OK to throw a catchable exception from there.
             cx->clearPendingException();
         }
+
     }
 
     {
@@ -587,7 +590,6 @@ jit::LazyLinkTopActivation(JSContext* cx)
 
     MOZ_ASSERT(calleeScript->hasBaselineScript());
     MOZ_ASSERT(calleeScript->baselineOrIonRawPointer());
-
     return calleeScript->baselineOrIonRawPointer();
 }
 
@@ -642,6 +644,20 @@ JitCompartment::mark(JSTracer* trc, JSCompartment* compartment)
 {
     // Free temporary OSR buffer.
     trc->runtime()->jitRuntime()->freeOsrTempData();
+
+#ifdef JS_CODEGEN_PPC
+    // PPC uses absolute addresses (lis+ori) for stub calls in Ion code.
+    // If stubs are swept, Ion code has stale addresses pointing to zeroed pages.
+    // Keep stubs alive as long as the compartment is alive.
+    if (regExpMatcherStub_)
+        TraceManuallyBarrieredEdge(trc, &regExpMatcherStub_, "regExpMatcherStub");
+    if (regExpSearcherStub_)
+        TraceManuallyBarrieredEdge(trc, &regExpSearcherStub_, "regExpSearcherStub");
+    if (regExpTesterStub_)
+        TraceManuallyBarrieredEdge(trc, &regExpTesterStub_, "regExpTesterStub");
+    if (stringConcatStub_)
+        TraceManuallyBarrieredEdge(trc, &stringConcatStub_, "stringConcatStub");
+#endif
 }
 
 void
@@ -836,6 +852,9 @@ JitCode::finalize(FreeOp* fop)
 void
 JitCode::togglePreBarriers(bool enabled, ReprotectCode reprotect)
 {
+    if (!code_)
+        return;
+
     uint8_t* start = code_ + preBarrierTableOffset();
     CompactBufferReader reader(start, start + preBarrierTableBytes_);
 
@@ -1900,8 +1919,10 @@ GenerateLIR(MIRGenerator* mir)
     LIRGenerator lirgen(mir, graph, *lir);
     {
         AutoTraceLog log(logger, TraceLogger_GenerateLIR);
+
         if (!lirgen.generate())
             return nullptr;
+
         gs.spewPass("Generate LIR");
 
         if (mir->shouldCancel("Generate LIR"))
@@ -1912,6 +1933,7 @@ GenerateLIR(MIRGenerator* mir)
 
     {
         AutoTraceLog log(logger, TraceLogger_RegisterAllocation);
+
 
         IonRegisterAllocator allocator = mir->optimizationInfo().registerAllocator();
 
@@ -1927,6 +1949,7 @@ GenerateLIR(MIRGenerator* mir)
                                            allocator == RegisterAllocator_Testbed);
             if (!regalloc.go())
                 return nullptr;
+
 
 #ifdef DEBUG
             if (!integrity.check(false))
@@ -1992,14 +2015,18 @@ CompileBackEnd(MIRGenerator* mir)
     AutoEnterIonCompilation enter(mir->safeForMinorGC());
     AutoSpewEndFunction spewEndFunction(mir);
 
+
     if (!OptimizeMIR(mir))
         return nullptr;
+
 
     LIRGraph* lir = GenerateLIR(mir);
     if (!lir)
         return nullptr;
 
-    return GenerateCode(mir, lir);
+
+    CodeGenerator* cg = GenerateCode(mir, lir);
+    return cg;
 }
 
 // Find a finished builder for the compartment.
@@ -2129,7 +2156,20 @@ IonCompile(JSContext* cx, JSScript* script,
     // it in a helper thread.
     script->ensureNonLazyCanonicalFunction();
 
+
     TrackPropertiesForSingletonScopes(cx, script, baselineFrame);
+#ifdef JS_CODEGEN_PPC
+    {
+        const char* fn = script->filename();
+        if (fn && strcmp(fn, "self-hosted") == 0) {
+            unsigned line = script->lineno();
+            fprintf(stderr, "ION-SH: %s:%u\n", fn, line);
+            fflush(stderr);
+
+        }
+    }
+#endif
+
 
     LifoAlloc* alloc = cx->new_<LifoAlloc>(TempAllocator::PreferredLifoChunkSize);
     if (!alloc)
@@ -2829,8 +2869,10 @@ EnterIon(JSContext* cx, EnterJitData& data)
 #ifdef DEBUG
         nogc.reset();
 #endif
-        CALL_GENERATED_CODE(enter, data.jitcode, data.maxArgc, data.maxArgv, /* osrFrame = */nullptr, data.calleeToken,
-                            /* envChain = */ nullptr, 0, data.result.address());
+        {
+            CALL_GENERATED_CODE(enter, data.jitcode, data.maxArgc, data.maxArgv, /* osrFrame = */nullptr, data.calleeToken,
+                                /* envChain = */ nullptr, 0, data.result.address());
+        }
     }
 
     MOZ_ASSERT(!cx->runtime()->jitRuntime()->hasIonReturnOverride());
@@ -3191,8 +3233,15 @@ jit::Invalidate(TypeZone& types, FreeOp* fop,
         return;
     }
 
-    for (JitActivationIterator iter(fop->runtime()); !iter.done(); ++iter)
+    fprintf(stderr, "PPC-INVALIDATE: starting InvalidateActivation loop\n");
+    fflush(stderr);
+    for (JitActivationIterator iter(fop->runtime()); !iter.done(); ++iter) {
+        fprintf(stderr, "PPC-INVALIDATE: InvalidateActivation iter\n");
+        fflush(stderr);
         InvalidateActivation(fop, iter, false);
+    }
+    fprintf(stderr, "PPC-INVALIDATE: InvalidateActivation loop done\n");
+    fflush(stderr);
 
     // Drop the references added above. If a script was never active, its
     // IonScript will be immediately destroyed. Otherwise, it will be held live
@@ -3208,6 +3257,12 @@ jit::Invalidate(TypeZone& types, FreeOp* fop,
         if (!ionScript)
             continue;
 
+        fprintf(stderr, "PPC-INVALIDATE: script=%p ion=%p %s:%u\n",
+                (void*)script, (void*)ionScript,
+                script->filename() ? script->filename() : "?",
+                (unsigned)script->lineno());
+        fflush(stderr);
+
         script->setIonScript(nullptr, nullptr);
         ionScript->decrementInvalidationCount(fop);
         co->invalidate();
@@ -3220,6 +3275,8 @@ jit::Invalidate(TypeZone& types, FreeOp* fop,
             script->resetWarmUpCounter();
     }
 
+    fprintf(stderr, "PPC-INVALIDATE: done, numInvalidations=%zu\n", numInvalidations);
+    fflush(stderr);
     // Make sure we didn't leak references by invalidating the same IonScript
     // multiple times in the above loop.
     MOZ_ASSERT(!numInvalidations);
@@ -3341,9 +3398,14 @@ PerThreadData::setAutoFlushICache(AutoFlushICache* afc)
 void
 AutoFlushICache::setRange(uintptr_t start, size_t len)
 {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
-    AutoFlushICache* afc = TlsPerThreadData.get()->PerThreadData::autoFlushICache();
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
+    PerThreadData* pt = TlsPerThreadData.get();
+    if (!pt)
+        return;
+    AutoFlushICache* afc = pt->PerThreadData::autoFlushICache();
     MOZ_ASSERT(afc);
+    if (!afc)
+        return;
     MOZ_ASSERT(!afc->start_);
     JitSpewCont(JitSpew_CacheFlush, "(%" PRIxPTR " %" PRIxSIZE "):", start, len);
 
@@ -3374,7 +3436,7 @@ AutoFlushICache::setRange(uintptr_t start, size_t len)
 void
 AutoFlushICache::flush(uintptr_t start, size_t len)
 {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
     PerThreadData* pt = TlsPerThreadData.get();
     AutoFlushICache* afc = pt ? pt->PerThreadData::autoFlushICache() : nullptr;
     if (!afc) {
@@ -3401,9 +3463,14 @@ AutoFlushICache::flush(uintptr_t start, size_t len)
 void
 AutoFlushICache::setInhibit()
 {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
-    AutoFlushICache* afc = TlsPerThreadData.get()->PerThreadData::autoFlushICache();
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
+    PerThreadData* pt = TlsPerThreadData.get();
+    if (!pt)
+        return;
+    AutoFlushICache* afc = pt->PerThreadData::autoFlushICache();
     MOZ_ASSERT(afc);
+    if (!afc)
+        return;
     MOZ_ASSERT(afc->start_);
     JitSpewCont(JitSpew_CacheFlush, "I");
     afc->inhibit_ = true;
@@ -3428,15 +3495,19 @@ AutoFlushICache::setInhibit()
 // the respective AutoFlushICache dynamic context.
 //
 AutoFlushICache::AutoFlushICache(const char* nonce, bool inhibit)
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
   : start_(0),
     stop_(0),
     name_(nonce),
     inhibit_(inhibit)
 #endif
 {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
     PerThreadData* pt = TlsPerThreadData.get();
+    if (!pt) {
+        prev_ = nullptr;
+        return;
+    }
     AutoFlushICache* afc = pt->PerThreadData::autoFlushICache();
     if (afc)
         JitSpew(JitSpew_CacheFlush, "<%s,%s%s ", nonce, afc->name_, inhibit ? " I" : "");
@@ -3450,8 +3521,13 @@ AutoFlushICache::AutoFlushICache(const char* nonce, bool inhibit)
 
 AutoFlushICache::~AutoFlushICache()
 {
-#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64)
+#if defined(JS_CODEGEN_ARM) || defined(JS_CODEGEN_ARM64) || defined(JS_CODEGEN_MIPS32) || defined(JS_CODEGEN_MIPS64) || defined(JS_CODEGEN_PPC)
     PerThreadData* pt = TlsPerThreadData.get();
+    if (!pt) {
+        if (!inhibit_ && start_)
+            ExecutableAllocator::cacheFlush((void*)start_, size_t(stop_ - start_));
+        return;
+    }
     MOZ_ASSERT(pt->PerThreadData::autoFlushICache() == this);
 
     if (!inhibit_ && start_)

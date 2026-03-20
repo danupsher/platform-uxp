@@ -31,6 +31,7 @@
 #include "nsCategoryManager.h"
 #include "nsCOMPtr.h"
 #include "nsComponentManager.h"
+#include <cstdio>
 #include "nsDirectoryService.h"
 #include "nsDirectoryServiceDefs.h"
 #include "nsCategoryManager.h"
@@ -381,6 +382,12 @@ nsComponentManagerImpl::Init()
 
     bool equals = false;
     appDir->Equals(greDir, &equals);
+    {
+      nsCString grePath, appPath;
+      greDir->GetNativePath(grePath);
+      appDir->GetNativePath(appPath);
+      fprintf(stderr, "PPC-COMPMGR: greDir=%s appDir=%s equals=%d\n", grePath.get(), appPath.get(), equals);
+    }
     if (!equals) {
       cl = sModuleLocations->AppendElement();
       cl->type = NS_APP_LOCATION;
@@ -587,6 +594,11 @@ DoRegisterManifest(NSLocationType aType,
                    bool aChromeOnly,
                    bool aXPTOnly)
 {
+  {
+    nsCString uri;
+    aFile.GetURIString(uri);
+    fprintf(stderr, "PPC-COMPMGR: RegisterManifest: %s\n", uri.get());
+  }
   MOZ_ASSERT(!aXPTOnly || !nsComponentManagerImpl::gComponentManager);
   uint32_t len;
   FileLocation::Data data;
@@ -622,6 +634,7 @@ nsComponentManagerImpl::ManifestManifest(ManifestProcessingContext& aCx,
                                          int aLineNo, char* const* aArgv)
 {
   char* file = aArgv[0];
+  fprintf(stderr, "PPC-COMPMGR: manifest directive: %s\n", file);
   FileLocation f(aCx.mFile, file);
   RegisterManifest(aCx.mType, f, aCx.mChromeOnly);
 }
@@ -1164,6 +1177,9 @@ nsComponentManagerImpl::CreateInstanceByContractID(const char* aContractID,
 
   nsresult rv;
   nsCOMPtr<nsIFactory> factory = entry->GetFactory();
+  if (!factory) {
+    fprintf(stderr, "PPC-COMPMGR: CreateInstance(%s): GetFactory() returned NULL\n", aContractID);
+  }
   if (factory) {
 
     rv = factory->CreateInstance(aDelegate, aIID, aResult);
@@ -1461,6 +1477,7 @@ nsComponentManagerImpl::GetServiceByContractID(const char* aContractID,
 
   nsFactoryEntry* entry = mContractIDs.Get(nsDependentCString(aContractID));
   if (!entry) {
+    fprintf(stderr, "PPC-COMPMGR: GetService(%s): NO ENTRY\n", aContractID);
     return NS_ERROR_FACTORY_NOT_REGISTERED;
   }
 
@@ -1524,6 +1541,9 @@ nsComponentManagerImpl::GetServiceByContractID(const char* aContractID,
     SafeMutexAutoUnlock unlock(mLock);
     rv = CreateInstanceByContractID(aContractID, nullptr, aIID,
                                     getter_AddRefs(service));
+  }
+  if (NS_FAILED(rv)) {
+    fprintf(stderr, "PPC-COMPMGR: GetService(%s): CreateInstance FAILED rv=0x%x\n", aContractID, (unsigned)rv);
   }
   if (NS_SUCCEEDED(rv) && !service) {
     NS_ERROR("Factory did not return an object but returned success");

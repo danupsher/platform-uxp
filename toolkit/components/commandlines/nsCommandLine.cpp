@@ -1,4 +1,5 @@
 /* This Source Code Form is subject to the terms of the Mozilla Public
+#include <cstdio>
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
@@ -515,6 +516,7 @@ nsCommandLine::EnumerateHandlers(EnumerateHandlersCallback aCallback, void *aClo
   bool hasMore;
   while (NS_SUCCEEDED(strenum->HasMore(&hasMore)) && hasMore) {
     strenum->GetNext(entry);
+    fprintf(stderr, "PPC-CMDLINE: handler entry=%s\n", entry.get());
 
     nsCString contractID;
     rv = catman->GetCategoryEntry("command-line-handler",
@@ -524,6 +526,7 @@ nsCommandLine::EnumerateHandlers(EnumerateHandlersCallback aCallback, void *aClo
       continue;
 
     nsCOMPtr<nsICommandLineHandler> clh(do_GetService(contractID.get()));
+    fprintf(stderr, "PPC-CMDLINE: contract=%s clh=%p\n", contractID.get(), (void*)clh.get());
     if (!clh) {
       LogConsoleMessage(u"Contract ID '%s' was registered as a command line handler for entry '%s', but could not be created.",
                         contractID.get(), entry.get());
@@ -561,6 +564,7 @@ nsCommandLine::EnumerateValidators(EnumerateValidatorsCallback aCallback, void *
   bool hasMore;
   while (NS_SUCCEEDED(strenum->HasMore(&hasMore)) && hasMore) {
     strenum->GetNext(entry);
+    fprintf(stderr, "PPC-CMDLINE: handler entry=%s\n", entry.get());
 
     nsXPIDLCString contractID;
     rv = catman->GetCategoryEntry("command-line-validator",

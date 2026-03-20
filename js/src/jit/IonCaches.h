@@ -12,6 +12,8 @@
 # include "jit/arm64/Assembler-arm64.h"
 #elif defined(JS_CODEGEN_MIPS32)
 # include "jit/mips32/Assembler-mips32.h"
+#elif defined(JS_CODEGEN_PPC)
+# include "jit/ppc/Assembler-ppc.h"
 #elif defined(JS_CODEGEN_MIPS64)
 # include "jit/mips64/Assembler-mips64.h"
 #endif
