@@ -360,13 +360,7 @@ CanEnterBaselineJIT(JSContext* cx, HandleScript script, InterpreterFrame* osrFra
     if (script->hasBaselineScript())
         return Method_Compiled;
 
-#if defined(JS_CODEGEN_PPC)
-    // PPC: Only baseline-compile self-hosted scripts for now.
-    // Non-self-hosted scripts (URLs containing "://") trigger a crash
-    // in PPC baseline JIT code generation (PromiseObject::create null ptr).
-    if (script->filename() && strstr(script->filename(), "://"))
-        return Method_CantCompile;
-#endif
+    // PPC: web content baseline block REMOVED — Baseline is stable now
 
     // Check this before calling ensureJitCompartmentExists, so we're less
     // likely to report OOM in JSRuntime::createJitRuntime.

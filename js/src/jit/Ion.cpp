@@ -2430,6 +2430,17 @@ CheckScriptSize(JSContext* cx, JSScript* script)
 bool
 CanIonCompileScript(JSContext* cx, JSScript* script, bool osr)
 {
+#if defined(JS_CODEGEN_PPC)
+    // PPC: Ion bailout trampoline has frame corruption issues with web content.
+    // Allow Ion only for internal scripts (resource://, chrome://, file:///Applications/, self-hosted).
+    // Web content (http://, https://) runs in Baseline JIT only.
+    if (script->filename()) {
+        const char* fn = script->filename();
+        if ((strncmp(fn, "http://", 7) == 0 || strncmp(fn, "https://", 8) == 0)) {
+            return false;
+        }
+    }
+#endif
     if (!script->canIonCompile() || !CheckScript(cx, script, osr))
         return false;
 

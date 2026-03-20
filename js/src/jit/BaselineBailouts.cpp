@@ -664,6 +664,17 @@ InitFromBailout(JSContext* cx, HandleScript caller, jsbytecode* callerPC,
     Value returnValue;
     ArgumentsObject* argsObj = nullptr;
     BailoutKind bailoutKind = iter.bailoutKind();
+#ifdef JS_CODEGEN_PPC
+    {
+        const char* fn = script->filename();
+        if (fn && strstr(fn, "://") && strstr(fn, "self-hosted") == nullptr) {
+            fprintf(stderr, "ION-BAILOUT-KIND: %s:%u kind=%u(%s)\n",
+                    fn, (unsigned)script->lineno(),
+                    (unsigned)bailoutKind, BailoutKindString(bailoutKind));
+            fflush(stderr);
+        }
+    }
+#endif
     if (bailoutKind == Bailout_ArgumentCheck) {
         // Temporary hack -- skip the (unused) envChain, because it could be
         // bogus (we can fail before the env chain slot is set). Strip the
@@ -1976,6 +1987,18 @@ jit::FinishBailoutToBaseline(BaselineBailoutInfo* bailoutInfo)
       // Invalid assumption based on baseline code.
       case Bailout_OverflowInvalidate:
         outerScript->setHadOverflowBailout();
+#ifdef JS_CODEGEN_PPC
+        // PPC: If we already had an overflow bailout and still overflow,
+        // the recompilation isn't learning. Forbid Ion to stop bailout loop.
+        if (outerScript->hadOverflowBailout()) {
+            fprintf(stderr, "ION-OVERFLOW-FORBID: %s:%u\n",
+                    outerScript->filename() ? outerScript->filename() : "?",
+                    (unsigned)outerScript->lineno());
+            if (outerScript->hasIonScript())
+                jit::ForbidCompilation(cx, outerScript);
+            break;
+        }
+#endif
         [[fallthrough]];
       case Bailout_NonStringInputInvalidate:
       case Bailout_DoubleOutput:
