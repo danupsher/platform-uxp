@@ -8,6 +8,8 @@ This is the platform layer for [MachFox](https://github.com/danupsher/machfox-br
 
 ### JIT / JavaScript
 - Full PPC JIT backend — Baseline JIT + Ion optimizing compiler (35+ PPC-specific fixes)
+- Baseline JIT now compiles all web page JavaScript (interpreter-only restriction removed)
+- Ion for internal scripts only (web content Ion bailout fix in progress)
 - r28 register reserved in NonAllocatableMask (root cause of systemic Ion crash)
 - Native regexp with big-endian multi-character load fix (CanReadUnaligned)
 - outOfLineTruncateSlow implemented for PPC
@@ -36,6 +38,7 @@ See the [MachFox browser repo](https://github.com/danupsher/machfox-browser) for
 
 ## Releases
 
+- **[v3.4](https://github.com/danupsher/platform-uxp/releases/tag/tiger-ppc-v3.4)** — Baseline JIT for all web content (was interpreter-only). Ion overflow bailout fix. G5 only.
 - **[v3.3](https://github.com/danupsher/platform-uxp/releases/tag/tiger-ppc-v3.3)** — Full Ion JIT, native regexp, r28 fix, H.264 AltiVec. YouTube working.
 - **[v3.1](https://github.com/danupsher/platform-uxp/releases/tag/tiger-ppc-v3.1)** — Re-linked with G3-safe runtime libraries. Fixes G4/G3 crash.
 - **[v3.0](https://github.com/danupsher/platform-uxp/releases/tag/tiger-ppc-v3.0)** — Initial release with GPU compositing.
